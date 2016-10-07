@@ -2,9 +2,8 @@
 
 '''
 
-import qrcode, platform, requests
+import qrcode, platform
 from Exception import CreateQrException
-from PIL import Image
 
 __all__ = [ 'create' ]
 

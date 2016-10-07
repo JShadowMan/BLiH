@@ -2,6 +2,12 @@
 
 '''
 
+class ConfigException(Exception):
+    pass
+
+class CreateQrException(Exception):
+    pass
+
 class UserException(Exception):
     pass
 

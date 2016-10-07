@@ -3,7 +3,7 @@
 '''
 
 import requests, logging
-from . import Exception, Storage, Config
+from . import Exception, Storage, Config, TerminalQr
 
 class Helper(object):
 
@@ -32,13 +32,20 @@ class Helper(object):
 
     def __initSession(self, *, QRLogin = False, username = None, password = None):
         logging.info('Create a New Session...')
-        self.__sessionObject.get(Config.START_URL)
+        self.__sessionObject.get(Config.START_URL, stream = True).close()
 
         logging.info('From BiliBili Getting OAUTH Key...')
         response = self.__sessionObject.get(Config.OAUTH_KEY_URL).json()
-        logging.info('OAUTH Key Getting Completed... <' + response.get('data').get('oauthKey') + '>')
+        self.__OAuthKey = response.get('data').get('oauthKey')
+        logging.info('OAUTH Key Getting Completed... <' + self.__OAuthKey + '>')
 
         if QRLogin is not True:
-            logging.info('Authentication of Identity... <' + username + '>')
+            logging.info('Authentication of Identity... <' + username + ':*@bilibili.com>')
         else:
             logging.info('Authentication of Identity... <QR Login>')
+            with TerminalQr.create(Config.QR_LOGIN_URL % self.__OAuthKey) as qc:
+                print(qc)
+
+        input()
+        response = self.__sessionObject.get('https://account.bilibili.com/site/setting')
+        print(response.text)
