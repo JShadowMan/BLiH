@@ -90,3 +90,6 @@ ENV/
 
 # PyCharm Config Settings
 .*
+
+# Pickle Module File
+*.pkl

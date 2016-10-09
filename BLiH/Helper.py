@@ -2,15 +2,20 @@
 
 '''
 
-import requests, logging
-from . import Exception, Storage, Config, TerminalQr
+import requests, logging, sys, time
+import asyncio
+import pickle
+from . import Exception, Storage, Config, TerminalQr, User
 
 class Helper(object):
 
     def __init__(self, **kwargs):
+        self.__oauthKey           = None
         self.__accountInformation = {}
         self.__userInformation    = {}
+        self.__userPool           = {}
         self.__sessionObject      = requests.Session()
+        self.__outFile            = sys.stdout
 
         if ('username' in kwargs) and ('password' in kwargs):
             self.login(**kwargs)
@@ -34,18 +39,62 @@ class Helper(object):
         logging.info('Create a New Session...')
         self.__sessionObject.get(Config.START_URL, stream = True).close()
 
-        logging.info('From BiliBili Getting OAUTH Key...')
-        response = self.__sessionObject.get(Config.OAUTH_KEY_URL).json()
-        self.__OAuthKey = response.get('data').get('oauthKey')
-        logging.info('OAUTH Key Getting Completed... <' + self.__OAuthKey + '>')
+        self.__getOAuthKey()
 
         if QRLogin is not True:
             logging.info('Authentication of Identity... <' + username + ':*@bilibili.com>')
         else:
             logging.info('Authentication of Identity... <QR Login>')
-            with TerminalQr.create(Config.QR_LOGIN_URL % self.__OAuthKey) as qc:
-                print(qc)
+            with TerminalQr.create(Config.QrLoginUrl(self.__oauthKey)) as qc:
+                print(qc, file = self.__outFile)
 
-        input()
-        response = self.__sessionObject.get('https://account.bilibili.com/site/setting')
-        print(response.text)
+        self.__checkLoginInfo()
+
+        user = User.User(self.__sessionObject.cookies, oauthKey = self.__oauthKey)
+        self.__userPool[user.name] = user
+        print(self.__userPool)
+
+        self.__saveSession()
+
+    def __getOAuthKey(self):
+        logging.info('From BiliBili Getting OAUTH Key...')
+        response = self.__sessionObject.get(Config.OAUTH_KEY_URL).json()
+        self.__oauthKey = response.get('data').get('oauthKey')
+        logging.info('OAUTH Key Getting Completed... <' + self.__oauthKey + '>')
+
+        return self.__oauthKey
+
+    def __checkLoginInfo(self):
+        for reLoginCount in range(0, Config.RE_LOGIN_COUNT, Config.DETECT_LOGIN_STATUS_INTERVAL):
+            info = None
+            for sec in range(Config.QR_EXPIRED_TIME):
+                info = self.__sessionObject.post(Config.LOGIN_INFO_URL, data={'oauthKey': self.__oauthKey}).json()
+
+                if info.get('status', None) is True:
+                    break
+                else:
+                    time.sleep(Config.DETECT_LOGIN_STATUS_INTERVAL)
+            else:
+                logging.info('QrCode Expired! Refresh QrCode ...')
+
+                with TerminalQr.create(Config.QrLoginUrl(self.__getOAuthKey())) as qc:
+                    print(qc, file=self.__outFile)
+
+            if info.get('status', None) is True:
+                if 'data' in info and 'url' in info['data']:
+                    try:
+                        # self.__sessionObject.get(info['data']['url']).close()
+                        pass
+                    except requests.exceptions.ConnectionError as e:
+                        print(e)
+                break
+        else:
+            self.__exit(logging.error, 'The number of retries exceeds the limit.')
+
+    def __saveSession(self):
+        with open('session.pkl', 'wb') as f:
+            pickle._dump(self.__sessionObject.cookies, f, 2)
+
+    def __exit(self, handler, message):
+        handler(message)
+        exit()

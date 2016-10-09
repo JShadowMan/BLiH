@@ -9,6 +9,15 @@ OAUTH_KEY_URL = 'https://passport.bilibili.com/qrcode/getLoginUrl'
 QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey=%s'
 LOGIN_INFO_URL = 'https://passport.bilibili.com/qrcode/getLoginInfo'
 
+# Expiration time is 3 minutes. To be safe, on that basis minus 5 seconds
+QR_EXPIRED_TIME = 3 * 60 - 5
+
+# Detection frequency of login status
+DETECT_LOGIN_STATUS_INTERVAL = 2
+
+# Number of retries
+RE_LOGIN_COUNT = 3
+
 CAPTCHA_URL   = 'https://passport.bilibili.com/captcha'
 
 VIDEO_URL = 'http://www.bilibili.com/video/av%s/'

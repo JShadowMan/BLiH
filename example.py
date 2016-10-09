@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-import time
-from BLiH import bliHelper, enableLogging
+from BLiH import bliHelper
 
 # helper = bliHelper(username = 'ac.strive@gmail.com', password = 'password')
 
