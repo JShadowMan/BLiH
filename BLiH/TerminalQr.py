@@ -3,7 +3,7 @@
 '''
 
 import qrcode, platform
-from Exception import CreateQrException
+from .Exceptions import CreateQrException
 
 __all__ = [ 'create' ]
 
@@ -41,8 +41,6 @@ class TerminalQr(object):
 
         self.__detectPadding()
         self.__splitPixels()
-
-        self.__image.save('png.png')
 
     def reverse(self):
         TerminalQr.BLACK, TerminalQr.BLANK = TerminalQr.BLANK, TerminalQr.BLACK

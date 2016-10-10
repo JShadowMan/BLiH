@@ -2,10 +2,10 @@
 
 '''
 
-import requests, logging, sys, time
+import requests, logging, sys, time, os
 import asyncio
 import pickle
-from . import Exception, Storage, Config, TerminalQr, User
+from . import Exceptions, Storage, Config, TerminalQr, User
 
 class Helper(object):
 
@@ -17,11 +17,14 @@ class Helper(object):
         self.__sessionObject      = requests.Session()
         self.__outFile            = sys.stdout
 
-        if ('username' in kwargs) and ('password' in kwargs):
-            self.login(**kwargs)
+        if kwargs.get('session', None) is True:
+            if self.__loadSession() == False:
+                if 'QRLogin' in kwargs:
+                    self.QRLogin()
+                elif ('username' in kwargs) and ('password' in kwargs):
+                    self.login(**kwargs)
 
-        if 'QRLogin' in kwargs:
-            self.QRLogin()
+        print(self.__userPool)
 
     def login(self, username, password):
         self.__initSession(username = username, password = password)
@@ -48,11 +51,11 @@ class Helper(object):
             with TerminalQr.create(Config.QrLoginUrl(self.__oauthKey)) as qc:
                 print(qc, file = self.__outFile)
 
+        # poll server check login status
         self.__checkLoginInfo()
 
         user = User.User(self.__sessionObject.cookies, oauthKey = self.__oauthKey)
         self.__userPool[user.name] = user
-        print(self.__userPool)
 
         self.__saveSession()
 
@@ -92,8 +95,24 @@ class Helper(object):
             self.__exit(logging.error, 'The number of retries exceeds the limit.')
 
     def __saveSession(self):
+        session = {}
+        for user in self.__userPool:
+            session[user] = self.__userPool[user].cookieJar
+
         with open('session.pkl', 'wb') as f:
-            pickle._dump(self.__sessionObject.cookies, f, 2)
+            pickle._dump(session, f, 2)
+
+    def __loadSession(self):
+        if os.path.isfile('session.pkl') == False:
+            return False
+
+        logging.info('Session file detected, using a saved session')
+        with open('session.pkl', 'rb') as f:
+            session = pickle.load(f)
+
+            for user in session:
+                if user not in self.__userPool:
+                    self.__userPool[user] = User.User(session[user])
 
     def __exit(self, handler, message):
         handler(message)

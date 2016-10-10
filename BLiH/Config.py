@@ -1,7 +1,7 @@
 '''BiliBili Helper Config Information
 
 '''
-from Exception import ConfigException
+from . import Exceptions
 
 START_URL     = 'https://passport.bilibili.com/login'
 OAUTH_KEY_URL = 'https://passport.bilibili.com/qrcode/getLoginUrl'
@@ -25,15 +25,15 @@ LIVE_URL  = 'http://live.bilibili.com/%s'
 
 def QrLoginUrl(oAuthKey = None):
     if oAuthKey is None:
-        raise ConfigException('oAuthKey parameter must be specified')
+        raise Exceptions.ConfigException('oAuthKey parameter must be specified')
     else:
         if len(oAuthKey) != 32:
-            raise ConfigException('oAuthKey format error, length is not 32')
+            raise Exceptions.ConfigException('oAuthKey format error, length is not 32')
         return QR_LOGIN_URL % oAuthKey
 
 def videoUrl(av = None):
     if av is None:
-        raise ConfigException('avCode parameter must be specified')
+        raise Exceptions.ConfigException('avCode parameter must be specified')
     if not isinstance(av, int):
-        raise ConfigException('avCode must be int type')
+        raise Exceptions.ConfigException('avCode must be int type')
     return VIDEO_URL % av

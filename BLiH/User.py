@@ -5,17 +5,19 @@
 import re
 import json
 import requests
-from . import Exception, Storage, Config
+from . import Exceptions, Storage, Config
 
 class User(object):
     def __init__(self, cookieJar, *, oauthKey = None):
         self.__sessionObject = requests.Session()
-        self.__sessionObject.cookies = cookieJar
+
+        if isinstance(cookieJar, requests.session().cookies.__class__):
+            self.__sessionObject.cookies = cookieJar
+        else:
+            raise Exceptions.UserException('cookieJar type error')
 
         self.__user = {}
         self.__initUserInformation()
-
-        print(self.__user['name'], self.__user['level'], self.__user['money'])
 
     def __initUserInformation(self):
         navJs = self.__sessionObject.get('http://interface.bilibili.com/nav.js').text
@@ -45,8 +47,12 @@ class User(object):
     def money(self):
         return self.__user.get('money', None)
 
+    @property
+    def cookieJar(self):
+        return self.__sessionObject.cookies
+
     @name.setter
-    def __name__set(self):
+    def name(self):
         # Change name
         pass
 
