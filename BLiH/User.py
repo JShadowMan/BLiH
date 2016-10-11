@@ -20,7 +20,7 @@ class User(object):
         self.__initUserInformation()
 
     def __initUserInformation(self):
-        navJs = self.__sessionObject.get('http://interface.bilibili.com/nav.js').text
+        navJs = self.__sessionObject.get(Config.GET_USER_INFO).text
         userInfo = json.loads(re.search('(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
 
         # TODO. Perfect this
