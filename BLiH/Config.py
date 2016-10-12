@@ -3,6 +3,9 @@
 '''
 from . import Exceptions
 
+# encoding
+ENCODING = 'UTF-8'
+
 START_URL     = 'https://passport.bilibili.com/login'
 OAUTH_KEY_URL = 'https://passport.bilibili.com/qrcode/getLoginUrl'
 
