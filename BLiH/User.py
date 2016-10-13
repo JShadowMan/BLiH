@@ -5,7 +5,7 @@
 import re
 import json
 import requests
-from . import Exceptions, Storage, Config
+from . import Exceptions, Storage, Config, TerminalQr
 
 class User(object):
     def __init__(self, cookieJar, *, oauthKey = None):
@@ -20,7 +20,7 @@ class User(object):
         self.__initUserInformation()
 
     def __initUserInformation(self):
-        navJs = self.__sessionObject.get(Config.GET_USER_INFO).text
+        navJs = self.get(Config.GET_USER_INFO).text
         userInfo = json.loads(re.search('(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
 
         # TODO. Perfect this
@@ -34,6 +34,21 @@ class User(object):
             'current': userInfo.get('level_info', {}).get('current_exp', None),
             'next': userInfo.get('level_info', {}).get('next_exp', None)
         }
+
+    def login(self, *, qrLogin = True, qrAdapter = TerminalQr.create, username = None, password = None):
+        pass
+
+    def get(self, url, *args, **kwargs):
+        try:
+            return self.__sessionObject.get(url = url, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            print(e)
+
+    def post(self, url, *args, **kwargs):
+        try:
+            return self.__sessionObject.post(url = url, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            print(e)
 
     @property
     def name(self):

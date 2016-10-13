@@ -40,7 +40,7 @@ class Helper(object):
 
     def __initSession(self, *, QRLogin = False, username = None, password = None):
         logging.info('Create a New Session...')
-        self.__sessionObject.get(Config.START_URL, stream = True).close()
+        self.__sessionObject.get(Config.INIT_COOKIES_START, stream = True).close()
 
         self.__getOAuthKey()
 
@@ -61,7 +61,7 @@ class Helper(object):
 
     def __getOAuthKey(self):
         logging.info('From BiliBili Getting OAUTH Key...')
-        response = self.__sessionObject.get(Config.OAUTH_KEY_URL).json()
+        response = self.__sessionObject.get(Config.GET_OAUTH_KEY).json()
         self.__oauthKey = response.get('data').get('oauthKey')
         logging.info('OAUTH Key Getting Completed... <' + self.__oauthKey + '>')
 
@@ -99,17 +99,14 @@ class Helper(object):
         for user in self.__userPool:
             session[user] = self.__userPool[user].cookieJar
 
-        with open('session.pkl', 'wb') as f:
-            pickle._dump(session, f, 2)
+        Storage.dump('session.pkl', session)
 
     def __loadSession(self):
         if os.path.isfile('session.pkl') == False:
             return False
 
         logging.info('Session file detected, using a saved session')
-        with open('session.pkl', 'rb') as f:
-            session = pickle.load(f)
-
+        with Storage.load('session.pkl') as session:
             for user in session:
                 if user not in self.__userPool:
                     self.__userPool[user] = User.User(session[user])

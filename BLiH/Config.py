@@ -6,8 +6,8 @@ from . import Exceptions
 # encoding
 ENCODING = 'UTF-8'
 
-START_URL     = 'https://passport.bilibili.com/login'
-OAUTH_KEY_URL = 'https://passport.bilibili.com/qrcode/getLoginUrl'
+INIT_COOKIES_START = 'https://passport.bilibili.com/login'
+GET_OAUTH_KEY      = 'https://passport.bilibili.com/qrcode/getLoginUrl'
 
 QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey=%s'
 LOGIN_INFO_URL = 'https://passport.bilibili.com/qrcode/getLoginInfo'
