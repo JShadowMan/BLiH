@@ -1,3 +1,0 @@
-''' Live.BiliBili Helper Utils
-
-'''
