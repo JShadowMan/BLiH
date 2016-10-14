@@ -3,7 +3,7 @@
 '''
 
 import pickle, io
-
+import logging
 
 def dump(file, data):
     if isinstance(file, str):
@@ -24,7 +24,7 @@ def load(file):
         else:
             raise TypeError("file must have a 'write' attribute")
     except Exception as e:
-        print('In Storage:', e)
+        logging.debug('In Storage: %s' % ( e ))
 
 class SessionStorage(dict):
 

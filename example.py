@@ -2,6 +2,7 @@
 
 from BLiH import bliHelper
 
-# helper = bliHelper(username = 'ac.strive@gmail.com', password = 'password')
+helper = bliHelper(afterLogin = False)
 
-helper = bliHelper()
+result = helper.select('GoogleMap').doSign()
+print(result)

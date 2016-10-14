@@ -2,115 +2,102 @@
 
 '''
 
-import requests, logging, sys, time, os
+import os
+import logging
 import asyncio
-import pickle
-from . import Exceptions, Storage, Config, TerminalQr, User
+from collections import namedtuple
+from BLiH import Exceptions, Storage, Config, TerminalQr
+from BLiH.User import User
+
+def bliHelper(QRLogin = True, *, storage = True, username = None, password = None, log = True, logfile = None,
+              afterLogin = True, multiUser = False, autoDump = True):
+    if log is True:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
+                            datefmt='%d %b %Y %H:%M:%S')
+
+    helper = Helper(storage = storage)
+    if helper.accountSize() != 0 and afterLogin is False:
+        return helper
+    if (username is not None) and (password is not None):
+        helper.login(username = username, password = password)
+    elif QRLogin is True:
+        helper.login()
+    else:
+        if helper.accountSize() is 0:
+            raise Exceptions.FatalException('Params error')
+
+    if autoDump is True:
+        helper.dump()
+    return helper
 
 class Helper(object):
 
-    def __init__(self, **kwargs):
-        self.__oauthKey           = None
-        self.__accountInformation = {}
-        self.__userInformation    = {}
-        self.__userPool           = {}
-        self.__sessionObject      = requests.Session()
-        self.__outFile            = sys.stdout
+    __DUMP_FILE_NAME = 'userList.pkl'
 
-        if kwargs.get('session', None) is True:
-            if self.__loadSession() == False:
-                if 'QRLogin' in kwargs:
-                    self.QRLogin()
-                elif ('username' in kwargs) and ('password' in kwargs):
-                    self.login(**kwargs)
+    def __init__(self, *, storage = True):
+        self.__userList = {}
+        self.__loopInst = asyncio.get_event_loop()
+        self.__transaction = None # must be None
 
-        print(self.__userPool)
+        if storage is True:
+            self.__load()
 
-    def login(self, username, password):
-        self.__initSession(username = username, password = password)
-
-    def QRLogin(self):
-        self.__initSession(QRLogin = True)
-
-    def bullet(self, videoId, message):
-        pass
-
-    def listen(self, liveId):
-        pass
-
-    def __initSession(self, *, QRLogin = False, username = None, password = None):
-        logging.info('Create a New Session...')
-        self.__sessionObject.get(Config.INIT_COOKIES_START, stream = True).close()
-
-        self.__getOAuthKey()
-
-        if QRLogin is not True:
-            logging.info('Authentication of Identity... <' + username + ':*@bilibili.com>')
+    def login(self, QrLogin = True, *, username = None, password = None, storage = True, alias = None):
+        if username is not None and password is not None:
+            user = User(username = username, password = password)
+        elif QrLogin is True:
+            user = User(QrLogin = True)
         else:
-            logging.info('Authentication of Identity... <QR Login>')
-            with TerminalQr.create(Config.QrLoginUrl(self.__oauthKey)) as qc:
-                print(qc, file = self.__outFile)
+            raise Exceptions.FatalException('login parameters are incorrect, type not specified')
 
-        # poll server check login status
-        self.__checkLoginInfo()
+        self.__userList[alias if alias is not None and isinstance(alias, str) else user.name ] = user
+        logging.info('%s Login success' % ( user ))
 
-        user = User.User(self.__sessionObject.cookies, oauthKey = self.__oauthKey)
-        self.__userPool[user.name] = user
+    def dump(self):
+        self.__dump()
 
-        self.__saveSession()
+    def accountSize(self):
+        return len(self.__userList)
 
-    def __getOAuthKey(self):
-        logging.info('From BiliBili Getting OAUTH Key...')
-        response = self.__sessionObject.get(Config.GET_OAUTH_KEY).json()
-        self.__oauthKey = response.get('data').get('oauthKey')
-        logging.info('OAUTH Key Getting Completed... <' + self.__oauthKey + '>')
+    def isExists(self, name):
+        return name in self.__userList
 
-        return self.__oauthKey
+    def select(self, name):
+        if self.isExists(name):
+            # self.__transaction = name
+            return Transaction(self.__userList[name])
 
-    def __checkLoginInfo(self):
-        for reLoginCount in range(0, Config.RE_LOGIN_COUNT, Config.DETECT_LOGIN_STATUS_INTERVAL):
-            info = None
-            for sec in range(Config.QR_EXPIRED_TIME):
-                info = self.__sessionObject.post(Config.LOGIN_INFO_URL, data={'oauthKey': self.__oauthKey}).json()
+    def __dump(self):
+        Storage.dump(self.__DUMP_FILE_NAME, self.__userList)
 
-                if info.get('status', None) is True:
-                    break
-                else:
-                    time.sleep(Config.DETECT_LOGIN_STATUS_INTERVAL)
-            else:
-                logging.info('QrCode Expired! Refresh QrCode ...')
-
-                with TerminalQr.create(Config.QrLoginUrl(self.__getOAuthKey())) as qc:
-                    print(qc, file=self.__outFile)
-
-            if info.get('status', None) is True:
-                if 'data' in info and 'url' in info['data']:
-                    try:
-                        # self.__sessionObject.get(info['data']['url']).close()
-                        pass
-                    except requests.exceptions.ConnectionError as e:
-                        print(e)
-                break
-        else:
-            self.__exit(logging.error, 'The number of retries exceeds the limit.')
-
-    def __saveSession(self):
-        session = {}
-        for user in self.__userPool:
-            session[user] = self.__userPool[user].cookieJar
-
-        Storage.dump('session.pkl', session)
-
-    def __loadSession(self):
-        if os.path.isfile('session.pkl') == False:
+    def __load(self):
+        if os.path.isfile(self.__DUMP_FILE_NAME) == False:
             return False
 
-        logging.info('Session file detected, using a saved session')
-        with Storage.load('session.pkl') as session:
-            for user in session:
-                if user not in self.__userPool:
-                    self.__userPool[user] = User.User(session[user])
+        logging.info('Dump file detected, using a saved session')
+        with Storage.load(self.__DUMP_FILE_NAME) as userList:
+            logging.info('Dump file is loaded, the number of user is {}'.format(len(userList)))
 
-    def __exit(self, handler, message):
-        handler(message)
-        exit()
+            self.__userList = userList
+            for user in self.__userList:
+                logging.info('Updating user profile of {}'.format(user))
+                self.__userList[user].profileUpdate()
+
+OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
+
+class Transaction(object):
+
+    def __init__(self, user):
+        self.__userInstance = user
+
+    def doSign(self):
+        response = self.__userInstance.get(Config.LIVE_SIGN_DAILY).json()
+
+        if response.get('code') is 0 and response.get('msg') == 'OK':
+            return OperatorResult(self.__userInstance.name, 'Sign', True, response.get('data').get('text'), {
+                'allDays': response.get('data').get('text'),
+                'hadSignDays': response.get('data').get('hadSignDays')
+            })
+        else:
+            return OperatorResult(self.__userInstance.name, 'Sign', False, response.get('msg'), None)
+

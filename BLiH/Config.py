@@ -18,6 +18,9 @@ QR_EXPIRED_TIME = 3 * 60 - 5
 # Detection frequency of login status
 DETECT_LOGIN_STATUS_INTERVAL = 2
 
+# Number of retries, HTTP
+RE_HTTP_REQUEST_COUNT = 3
+
 # Number of retries
 RE_LOGIN_COUNT = 3
 

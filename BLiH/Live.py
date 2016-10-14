@@ -7,7 +7,6 @@ import re
 import requests
 import asyncio
 import random
-import abc
 from BLiH import Config
 
 # Package Type Value
