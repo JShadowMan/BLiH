@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
+import sys
 from BLiH import bliHelper
 
 helper = bliHelper(afterLogin = False)
 
-result = helper.select('GoogleMap').doSign()
-print(result)
+transaction = helper.select('GoogleMap')
+print(transaction.doSign())

@@ -6,10 +6,19 @@ from . import Exceptions
 # encoding
 ENCODING = 'UTF-8'
 
+# Max User Count
+MAX_USER_COUNT = 64
+
+# Init Cookies
 INIT_COOKIES_START = 'https://passport.bilibili.com/login'
+
+# From Server Get OAuth Key
 GET_OAUTH_KEY      = 'https://passport.bilibili.com/qrcode/getLoginUrl'
 
+# QrCode Contents
 QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey=%s'
+
+# Check Login Info
 LOGIN_INFO_URL = 'https://passport.bilibili.com/qrcode/getLoginInfo'
 
 # Expiration time is 3 minutes. To be safe, on that basis minus 5 seconds
@@ -24,9 +33,13 @@ RE_HTTP_REQUEST_COUNT = 3
 # Number of retries
 RE_LOGIN_COUNT = 3
 
+# Captcha Address
 CAPTCHA_URL   = 'https://passport.bilibili.com/captcha'
 
+# Video Address
 VIDEO_URL = 'http://www.bilibili.com/video/av%s/'
+
+# Live Room Address
 LIVE_URL  = 'http://live.bilibili.com/%s'
 
 # Get Sign Info

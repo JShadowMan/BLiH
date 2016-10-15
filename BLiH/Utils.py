@@ -2,11 +2,9 @@
 
 '''
 
+import random
 import asyncio
 
-async def sendPackage(socket, data):
-    pass
-
-async def receivePackage(socket, buffer):
-    pass
+def liveAnonymousUID():
+    return int(100000000000000 + (200000000000000 * random.random()))
 

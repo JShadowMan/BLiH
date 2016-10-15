@@ -8,8 +8,9 @@ import asyncio
 from collections import namedtuple
 from BLiH import Exceptions, Storage, Config, TerminalQr
 from BLiH.User import User
+from BLiH.User import Account
 
-def bliHelper(QRLogin = True, *, storage = True, username = None, password = None, log = True, logfile = None,
+def bliHelper(QRLogin = True, *, storage = True, account = (None, None), log = True, logfile = None,
               afterLogin = True, multiUser = False, autoDump = True):
     if log is True:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
@@ -18,16 +19,32 @@ def bliHelper(QRLogin = True, *, storage = True, username = None, password = Non
     helper = Helper(storage = storage)
     if helper.accountSize() != 0 and afterLogin is False:
         return helper
-    if (username is not None) and (password is not None):
-        helper.login(username = username, password = password)
-    elif QRLogin is True:
-        helper.login()
-    else:
-        if helper.accountSize() is 0:
-            raise Exceptions.FatalException('Params error')
+
+    if multiUser is False:
+        multiUser = 1
+
+    for index in range(min(multiUser, Config.MAX_USER_COUNT)):
+        if isinstance(account, Account):
+            account = [ account ]
+        elif not isinstance(account, list):
+            raise TypeError('Account must be Account or list type')
+
+        try:
+            username, password = account[index]
+        except IndexError:
+            username, password = (None, None)
+
+        if (username is not None) and (password is not None):
+            helper.login(username = username, password = password)
+        elif QRLogin is True:
+            helper.login()
+        else:
+            if helper.accountSize() is 0:
+                raise Exceptions.FatalException('Params error')
 
     if autoDump is True:
         helper.dump()
+
     return helper
 
 class Helper(object):
@@ -90,14 +107,25 @@ class Transaction(object):
     def __init__(self, user):
         self.__userInstance = user
 
+    def getSign(self):
+        response = self.__userInstance.get(Config.GET_SIGN_INFO).json()
+
+        return OperatorResult(self.__userInstance.name, 'GetSign', False, response.get('data').get('text').encode(Config.ENCODING), {
+            'curMonth': response.get('data').get('curMonth'),
+            'allDays': response.get('data').get('allDays'),
+            'hadSignDays': response.get('data').get('hadSignDays')
+        })
+
     def doSign(self):
         response = self.__userInstance.get(Config.LIVE_SIGN_DAILY).json()
 
         if response.get('code') is 0 and response.get('msg') == 'OK':
-            return OperatorResult(self.__userInstance.name, 'Sign', True, response.get('data').get('text'), {
-                'allDays': response.get('data').get('text'),
+            return OperatorResult(self.__userInstance.name, 'Sign', True,response.get('data').get('text').encode(Config.ENCODING), {
+                'allDays': response.get('data').get('allDays'),
                 'hadSignDays': response.get('data').get('hadSignDays')
             })
         else:
-            return OperatorResult(self.__userInstance.name, 'Sign', False, response.get('msg'), None)
+            return OperatorResult(self.__userInstance.name, 'Sign', False, response.get('msg').encode(Config.ENCODING), None)
 
+    def close(self):
+        pass
