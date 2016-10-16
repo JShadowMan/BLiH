@@ -4,6 +4,7 @@
 
 import struct
 import socket
+from collections import namedtuple
 from BLiH import Config, Exceptions
 
 # Package Type None
@@ -15,6 +16,10 @@ PKG_TYPE_JOIN_ROOM = 7
 # Package Type Value
 PKG_TYPE_HEARTBEAT = 2
 
+RawPackage    = namedtuple('RawPackage', 'pkgLength headerLength field1 type field2 body')
+PackageHeader = namedtuple('PackageHeader', 'pkgLength headerLength field1 type field2')
+Package       = namedtuple('Package', 'type header body')
+
 def sendPackage(sock, package):
     length = len(package)
     while length > 0:
@@ -22,16 +27,22 @@ def sendPackage(sock, package):
 
     return True
 
-def receivePackage(sock, *, receiveMaxLength = 4096):
+def receivePackage(sock, *, rawPackage = False):
     buffer = sock.recv(4)
     packageLength, = struct.unpack('!I', buffer)
     packageLength -= 4
 
     while packageLength > 0:
-        buffer += sock.recv(min(receiveMaxLength, packageLength))
+        buffer += sock.recv(packageLength)
         packageLength -= len(buffer)
 
-    return buffer
+
+    rawPackage = RawPackage(*struct.unpack('!IHHII{}s'.format(len(buffer) - 16), buffer))
+    if rawPackage is True:
+        return rawPackage
+    else:
+        return LivePackageParser.factory(rawPackage).package
+
 
 ''' Response Format
 
@@ -44,8 +55,63 @@ def receivePackage(sock, *, receiveMaxLength = 4096):
 '''
 class LivePackageParser(object):
 
-    def __init__(self):
-        pass
+    __SingleInstance = None
+
+    def __init__(self, rawPackage = None):
+        if rawPackage is None:
+            return
+
+        if not isinstance(rawPackage, RawPackage):
+            raise Exceptions.FatalException('Internal error occurs, rawPackage not allow')
+
+        self.__rawPackage = rawPackage
+
+    def parse(self, rawPackage):
+        if not isinstance(rawPackage, RawPackage):
+            raise Exceptions.FatalException('Internal error occurs, rawPackage not allow')
+
+        self.__rawPackage = rawPackage
+
+    @classmethod
+    def factory(cls, rawPackage):
+        if cls.__SingleInstance is None:
+            cls.__SingleInstance = LivePackageParser(None)
+
+        cls.__SingleInstance.parse(rawPackage)
+        return cls.__SingleInstance
+
+    @property
+    def type(self):
+        if self.__rawPackage.type == 0x05:
+            return 'DANMU MSG'
+        elif self.__rawPackage.type == 0x08:
+            return 'ALLOW JOIN'
+        elif self.__rawPackage.type == 0x02:
+            return 'HEARTBEAT'
+        else:
+            return None
+
+    @property
+    def header(self):
+        return PackageHeader(
+            self.__rawPackage.pkgLength,
+            self.__rawPackage.headerLength,
+            self.__rawPackage.field1,
+            self.__rawPackage.type,
+            self.__rawPackage.field2
+        )
+
+    @property
+    def body(self):
+        return self.__rawPackage.body
+
+    @property
+    def package(self):
+        return Package(
+            self.type,
+            self.header,
+            self.body
+        )
 
 class LivePackageGenerator(object):
 
@@ -84,9 +150,11 @@ class LivePackageGenerator(object):
         if sendPackage(self.__sock, package) is True:
             response = receivePackage(self.__sock)
             print(response)
-            if response == b'\x00\x00\x00\x10\x00\x10\x00\x01\x00\x00\x00\x08\x00\x00\x00\x01':
-                response = receivePackage(self.__sock)
-                print(response)
+            if response.type == 'ALLOW JOIN':
+                while True:
+                    response = receivePackage(self.__sock)
+                    print(response)
+                    print(response.body.decode(Config.ENCODING))
                 return True
 
     def heartbeat(self):
