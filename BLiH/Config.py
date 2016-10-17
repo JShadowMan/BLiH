@@ -9,6 +9,9 @@ ENCODING = 'UTF-8'
 # Max User Count
 MAX_USER_COUNT = 64
 
+# Live Heartbeat
+LIVE_HEARTBEAT_TIME = 30
+
 # Init Cookies
 INIT_COOKIES_START = 'https://passport.bilibili.com/login'
 

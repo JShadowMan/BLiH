@@ -51,9 +51,10 @@ class Helper(object):
 
     __DUMP_FILE_NAME = 'userList.pkl'
 
+    LoopInstance = asyncio.get_event_loop()
+
     def __init__(self, *, storage = True):
         self.__userList = {}
-        self.__loopInst = asyncio.get_event_loop()
         self.__transaction = None # must be None
 
         if storage is True:

@@ -1,58 +1,51 @@
 ''' BiliBili Live Package
-
 '''
 
+import abc
 import struct
 import socket
+import asyncio
+import logging
 from collections import namedtuple
 from BLiH import Config, Exceptions
 
-# Package Type None
-PKG_TYPE_NONE = -1
-
-# Package Type Value
-PKG_TYPE_JOIN_ROOM = 7
-
-# Package Type Value
-PKG_TYPE_HEARTBEAT = 2
-
-RawPackage    = namedtuple('RawPackage', 'pkgLength headerLength field1 type field2 body')
-PackageHeader = namedtuple('PackageHeader', 'pkgLength headerLength field1 type field2')
+RawPackage    = namedtuple('RawPackage', 'pkgLength headerLength version type unknown body')
+PackageHeader = namedtuple('PackageHeader', 'pkgLength headerLength version type unknown')
 Package       = namedtuple('Package', 'type header body')
 
-def sendPackage(sock, package):
-    length = len(package)
-    while length > 0:
-        length -= sock.send(package)
+async def sendPackage(sock, package, *, loop = asyncio.get_event_loop()):
+    loop.sock_sendall(sock, package)
 
     return True
 
-def receivePackage(sock, *, rawPackage = False):
-    buffer = sock.recv(4)
-    packageLength, = struct.unpack('!I', buffer)
-    packageLength -= 4
+async def receivePackage(sock, *, rawPackage = False, loop = asyncio.get_event_loop()):
+    try:
+        buffer = await loop.sock_recv(sock, 4)
+        packageLength, = struct.unpack('!I', buffer)
+        packageLength -= 4
 
-    while packageLength > 0:
-        buffer += sock.recv(packageLength)
-        packageLength -= len(buffer)
+        while packageLength > 0:
+            buffer += await loop.sock_recv(sock, packageLength)
+            packageLength -= len(buffer)
 
-
-    rawPackage = RawPackage(*struct.unpack('!IHHII{}s'.format(len(buffer) - 16), buffer))
-    if rawPackage is True:
-        return rawPackage
-    else:
-        return LivePackageParser.factory(rawPackage).package
-
+        rawPackage = RawPackage(*struct.unpack('!IHHII{}s'.format(len(buffer) - 16), buffer))
+        if rawPackage is True:
+            return rawPackage
+        else:
+            return LivePackageParser.factory(rawPackage).package
+    except struct.error as e:
+        raise Exceptions.FatalException('Receive package error occurs. internal error.')
 
 ''' Response Format
 
     packageLength Int(4)
-    unknown field Short(2)
-    unknown field Short(2)
+    headerLength  Short(2)
+    version       Short(2)
     package type  Int(4)
-    unknown field Int(4)
+    unknown       Int(4)
     json data     0+
 '''
+
 class LivePackageParser(object):
 
     __SingleInstance = None
@@ -82,27 +75,59 @@ class LivePackageParser(object):
 
     @property
     def type(self):
-        if self.__rawPackage.type == 0x05:
-            return 'DANMU MSG'
+        ''' Package Type
+
+              value             description         direction                note
+               02                Heartbeat             send                30s per time
+               03           Heartbeat-response        receive      number of people who watch live, Int(4)
+               05              DanMu Message          receive            dan-mu information
+               07               Join Live              send              join the live room
+               08               Allow Join            receive          allow join thee live room
+        '''
+        if self.__rawPackage.type == 0x02:
+            return self.PkgTypeHeartbeat
+        elif self.__rawPackage.type == 0x03:
+            return self.PkgTypeHeartbeatResponse
+        elif self.__rawPackage.type == 0x05:
+            return self.PkgTypeDanMuMessage
+        elif self.__rawPackage.type == 0x07:
+            return self.PkgTypeJoinLiveRoom
         elif self.__rawPackage.type == 0x08:
-            return 'ALLOW JOIN'
-        elif self.__rawPackage.type == 0x02:
-            return 'HEARTBEAT'
+            return self.PkgTypeAllowJoinLiveRoom
         else:
-            return None
+            return self.PackageType(0xFFFFFFFF, 'Error')
+
+    # Package Type Define
+    PackageType = namedtuple('PackageType', 'value toString')
+
+    PkgTypeHeartbeat         = PackageType(0x00000002, 'Heartbeat')
+    PkgTypeHeartbeatResponse = PackageType(0x00000003, 'Heartbeat Response')
+    PkgTypeDanMuMessage      = PackageType(0x00000005, 'Dan-Mu Message')
+    PkgTypeJoinLiveRoom      = PackageType(0x00000007, 'Join Live Room')
+    PkgTypeAllowJoinLiveRoom = PackageType(0x00000007, 'Allow Join')
 
     @property
     def header(self):
         return PackageHeader(
             self.__rawPackage.pkgLength,
             self.__rawPackage.headerLength,
-            self.__rawPackage.field1,
+            self.__rawPackage.version,
             self.__rawPackage.type,
-            self.__rawPackage.field2
+            self.__rawPackage.unknown
         )
 
     @property
     def body(self):
+        if self.type == self.PkgTypeHeartbeatResponse:
+            return { 'PeopleCount': struct.unpack('!I', self.__rawPackage.body)[0] }
+        elif self.type == self.PkgTypeAllowJoinLiveRoom:
+            return None
+        elif self.type == self.PkgTypeDanMuMessage:
+            return self.__parseDanMuMessage()
+        else:
+            return None
+
+    def __parseDanMuMessage(self):
         return self.__rawPackage.body
 
     @property
@@ -114,6 +139,12 @@ class LivePackageParser(object):
         )
 
 class LivePackageGenerator(object):
+
+    # Package Type Value
+    __PKG_TYPE_JOIN_ROOM = 7
+
+    # Package Type Value
+    __PKG_TYPE_HEARTBEAT = 2
 
     # Package Header Length = Int(4) + Short(2) + Short(2) + Int(4) + Int(4) + Int(4) = 16
     __PKG_HEADER_LENGTH = 16
@@ -133,35 +164,49 @@ class LivePackageGenerator(object):
     # DanMu Server Port
     __DM_SEVER_PORT = 788
 
-    def __init__(self, sock = None):
-        if sock is not None and isinstance(sock, int):
-            self.__sock = sock
-        else:
-            try:
-                self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.__sock.connect((self.__DM_SERVER_ADDRESS, self.__DM_SEVER_PORT))
-            except Exception as e:
-                print('LivePackageGenerator::__init__() error', e)
+    def __init__(self, *, loop = asyncio.get_event_loop()):
+        self.__loop      = loop
+        self.__listening = False
+        self.__roomID    = None
+        self.__uid       = None
+        self.__loop.set_debug(True)
 
-    def join(self, roomId, uid):
+        try:
+            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.__sock.connect((self.__DM_SERVER_ADDRESS, self.__DM_SEVER_PORT))
+            self.__sock.setblocking(False)
+        except Exception as e:
+            print('LivePackageGenerator::__init__() error', e)
+
+    async def join(self, roomId, uid):
+        self.__roomID = roomId
+        self.__uid    = uid
+
         data    = (self.__JOIN_ROOM_BODY_FORMAT % (roomId, uid)).encode(Config.ENCODING)
-        package = self.__packageGenerator(type = PKG_TYPE_JOIN_ROOM, body = data)
+        package = self.__packageGenerator(type = self.__PKG_TYPE_JOIN_ROOM, body = data)
 
-        if sendPackage(self.__sock, package) is True:
-            response = receivePackage(self.__sock)
+        if await sendPackage(self.__sock, package, loop = self.__loop) is True:
+            response = await receivePackage(self.__sock, loop = self.__loop)
             print(response)
-            if response.type == 'ALLOW JOIN':
+            if response.type == LivePackageParser.PkgTypeAllowJoinLiveRoom:
+                self.__listening = True
+
+                self.__loop.create_task(self.__heartbeat())
                 while True:
-                    response = receivePackage(self.__sock)
-                    print(response)
-                    print(response.body.decode(Config.ENCODING))
+                    package = await receivePackage(self.__sock, rawPackage = True, loop = self.__loop)
+                    print(package)
+
                 return True
 
-    def heartbeat(self):
-        pass
+    async def __heartbeat(self):
+        package = self.__packageGenerator(type = self.__PKG_TYPE_HEARTBEAT)
+        while self.__listening is True:
+            await asyncio.sleep(Config.LIVE_HEARTBEAT_TIME, loop = self.__loop)
+            await sendPackage(self.__sock, package, loop = self.__loop)
+            logging.debug('Heartbeat send completed (roomId = {}, uid = {})'.format(self.__roomID, self.__uid))
 
-    def __packageGenerator(self, *, type = PKG_TYPE_HEARTBEAT, body = None):
-        if type not in (PKG_TYPE_HEARTBEAT, PKG_TYPE_JOIN_ROOM):
+    def __packageGenerator(self, *, type = 0xFFFFFFFF, body = None):
+        if type not in (self.__PKG_TYPE_HEARTBEAT, self.__PKG_TYPE_JOIN_ROOM):
             pass
 
         if isinstance(body, str):
@@ -179,7 +224,7 @@ class LivePackageGenerator(object):
         if body is not None and not isinstance(body, bytes):
             raise TypeError('LivePackageGenerator::___makePackage params error')
 
-        pkgLength = headerLength + len(body)
+        pkgLength = headerLength + len(body) if body is not None else 0
 
         try:
             if body is None:
@@ -187,3 +232,39 @@ class LivePackageGenerator(object):
             return struct.pack('!IHHII{}s'.format(len(body)), pkgLength, headerLength, version, type, unknown, body)
         except Exception as e:
             pass
+
+    @classmethod
+    def getDanMuServerAddress(cls):
+        return cls.__DM_SERVER_ADDRESS
+
+    @classmethod
+    def getDanMuServerPort(cls):
+        return cls.__DM_SEVER_PORT
+
+class PackageHandlerProtocol(object, metaclass = abc.ABCMeta):
+
+    def __init__(self):
+        pass
+
+    @abc.abstractclassmethod
+    def onAllowJoin(self, package):
+        pass
+
+    @abc.abstractclassmethod
+    def onHeartbeatResponse(self, package):
+        pass
+
+    @abc.abstractclassmethod
+    def onDanMuMessage(self, package):
+        pass
+
+    @abc.abstractclassmethod
+    def onDanMu(self):
+        pass
+
+if __name__ == '__main__':
+    from BLiH import Utils
+    loop = asyncio.get_event_loop()
+    # loop.set_exception_handler(lambda loop,e: print(loop, e))
+    generator = LivePackageGenerator(loop = loop)
+    loop.run_until_complete(asyncio.wait([ generator.join(98284, Utils.liveAnonymousUID()) ]))
