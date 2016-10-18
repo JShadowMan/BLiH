@@ -24,9 +24,6 @@ def create(content = None, *, border = 1):
     else:
         return LinuxMixIn(qr.make_image(), content)
 
-
-    return TerminalQr(qr.make_image(), content)
-
 class TerminalQr(object):
     BLACK = '\u2588\u2588'
     BLANK = '  '

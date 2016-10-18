@@ -80,6 +80,9 @@ class Helper(object):
     def isExists(self, name):
         return name in self.__userList
 
+    def accounts(self):
+        return list(self.__userList.keys())
+
     def select(self, name):
         if self.isExists(name):
             # self.__transaction = name
