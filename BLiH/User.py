@@ -8,7 +8,7 @@ import json, time
 import requests
 import logging
 from collections import namedtuple
-from . import Exceptions, Config, TerminalQr, Live
+from . import Exceptions, Config, TerminalQr, Live, Utils
 
 # Account Information
 Account = namedtuple('Account', 'username password key')
@@ -190,6 +190,10 @@ class User(object):
     @property
     def oauthKey(self):
         return self.__account.key
+
+    @property
+    def uid(self):
+        return Utils.liveAnonymousUID()
 
     @name.setter
     def name(self):

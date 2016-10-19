@@ -60,6 +60,10 @@ class Helper(object):
         if storage is True:
             self.__load()
 
+        if not self.LoopInstance.is_running():
+            # call_soon
+            self.LoopInstance.run_forever()
+
     def login(self, QrLogin = True, *, username = None, password = None, storage = True, alias = None):
         if username is not None and password is not None:
             user = User(username = username, password = password)
@@ -130,6 +134,9 @@ class Transaction(object):
             })
         else:
             return OperatorResult(self.__userInstance.name, 'Sign', False, response.get('msg').encode(Config.ENCODING), None)
+
+    def listen(self, roomId):
+        pass
 
     def close(self):
         pass

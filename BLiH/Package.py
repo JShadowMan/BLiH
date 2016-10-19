@@ -144,7 +144,7 @@ class LivePackageParser(object):
         return Gift(contents.get('data', {}).get('uid', None), contents.get('data', {}).get('uname', None),
                     contents.get('data', {}).get('giftName', None), contents.get('data', {}).get('num', None),
                     contents.get('data', {}).get('timestamp', None), {
-            'roomId' : contents.get('roomid', None)
+            'roomId': contents.get('roomid', None)
             # top list
         })
 
@@ -155,6 +155,7 @@ class LivePackageParser(object):
             self.header,
             self.body
         )
+
 
 class LivePackageGenerator(object):
 
@@ -200,6 +201,7 @@ class LivePackageGenerator(object):
     async def join(self, roomId, uid, packageHandler):
         self.__roomID = roomId
         self.__uid    = uid
+
         if callable(packageHandler):
             handler = packageHandler()
 
@@ -233,7 +235,6 @@ class LivePackageGenerator(object):
                             self.__packageHandler.onGift(package.body)
                         elif messageType == 'Welcome':
                             self.__packageHandler.onWelcome(package.body)
-
 
     async def __heartbeat(self):
         package = self.__packageGenerator(type = self.__PKG_TYPE_HEARTBEAT)
@@ -363,4 +364,4 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     # loop.set_exception_handler(lambda loop,e: print(loop, e))
     generator = LivePackageGenerator(loop = loop)
-    loop.run_until_complete(generator.join(39936, Utils.liveAnonymousUID(), lambda : MessageHandler()))
+    loop.run_until_complete(generator.join(1017, Utils.liveAnonymousUID(), lambda : MessageHandler()))
