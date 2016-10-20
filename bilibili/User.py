@@ -8,7 +8,7 @@ import json, time
 import requests
 import logging
 from collections import namedtuple
-from . import Exceptions, Config, TerminalQr, Live, Utils
+from bilibili import Exceptions, Config, TerminalQr, Live, Utils
 
 # Account Information
 Account = namedtuple('Account', 'username password key')

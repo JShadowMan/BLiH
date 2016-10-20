@@ -6,12 +6,12 @@ import sys
 import random
 import asyncio
 import logging
-from . import Package
+from bilibili.Package import PackageHandlerProtocol
 
 def liveAnonymousUID():
     return int(100000000000000 + (200000000000000 * random.random()))
 
-class MessageHandler(Package.PackageHandlerProtocol):
+class MessageHandler(PackageHandlerProtocol):
 
     def __init__(self, *, file = sys.stdout):
         super(MessageHandler, self).__init__()

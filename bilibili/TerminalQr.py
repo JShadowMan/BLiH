@@ -3,7 +3,7 @@
 '''
 
 import qrcode, platform
-from .Exceptions import CreateQrException
+from bilibili.Exceptions import CreateQrException
 
 __all__ = [ 'create' ]
 

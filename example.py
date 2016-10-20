@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-import sys
-from BLiH import bliHelper
+from bilibili import Live
+import asyncio
 
-helper = bliHelper(afterLogin = False)
-print(helper.accounts())
 
-transaction = helper.select('GoogleMap')
-print(transaction.doSign())
+loop = asyncio.get_event_loop_policy()
+
+print(Live.LiveBiliBili().listen(1017))

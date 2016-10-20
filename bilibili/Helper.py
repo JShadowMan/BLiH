@@ -6,9 +6,9 @@ import os
 import logging
 import asyncio
 from collections import namedtuple
-from BLiH import Exceptions, Storage, Config, TerminalQr
-from BLiH.User import User
-from BLiH.User import Account
+from bilibili import Exceptions, Storage, Config, TerminalQr
+from bilibili.User import User
+from bilibili.User import Account
 
 def bliHelper(QRLogin = True, *, storage = True, account = (None, None), log = True, logfile = None,
               afterLogin = True, multiUser = False, autoDump = True):

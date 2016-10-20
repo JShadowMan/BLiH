@@ -8,7 +8,7 @@ import socket
 import asyncio
 import logging
 from collections import namedtuple
-from BLiH import Config, Exceptions
+from bilibili import Config, Exceptions
 
 RawPackage    = namedtuple('RawPackage', 'pkgLength headerLength version type unknown body')
 PackageHeader = namedtuple('PackageHeader', 'pkgLength headerLength version type unknown')
@@ -155,7 +155,6 @@ class LivePackageParser(object):
             self.header,
             self.body
         )
-
 
 class LivePackageGenerator(object):
 
@@ -335,33 +334,3 @@ class PackageHandlerProtocol(object, metaclass = abc.ABCMeta):
     @abc.abstractclassmethod
     def onError(self, package):
         pass
-
-if __name__ == '__main__':
-    from BLiH import Utils
-
-    class MessageHandler(PackageHandlerProtocol):
-
-        def onAllowJoin(self):
-            print('Join Live Room Completed')
-
-            return True
-
-        def onDanMuMessage(self, contents):
-            print('{} Say: {}'.format(contents.name, contents.message))
-
-        def onGift(self, contents):
-            print('{} sent out {} {}'.format(contents.name, contents.count, contents.gift))
-
-        def onHeartbeatResponse(self, contents):
-            print('Live Room People Count: {}'.format(contents.peopleCount))
-
-        def onWelcome(self, contents):
-            print('Welcome {}'.format(contents.name))
-
-        def onError(self, package):
-            print('Error occurs', package)
-
-    loop = asyncio.get_event_loop()
-    # loop.set_exception_handler(lambda loop,e: print(loop, e))
-    generator = LivePackageGenerator(loop = loop)
-    loop.run_until_complete(generator.join(1017, Utils.liveAnonymousUID(), lambda : MessageHandler()))

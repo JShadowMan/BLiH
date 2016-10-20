@@ -1,7 +1,7 @@
 '''BiliBili Helper Config Information
 
 '''
-from . import Exceptions
+from bilibili import Exceptions
 
 # encoding
 ENCODING = 'UTF-8'

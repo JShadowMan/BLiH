@@ -5,7 +5,7 @@
 from setuptools import setup
 
 setup(
-    name = 'BLiH',
+    name = 'bilibili',
     version = '1.0.0',
     description = 'Bilibili helper',
     author = 'ShadowMan, Wang',
