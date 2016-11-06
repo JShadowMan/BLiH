@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+#
+# Copyright (C) 2016 ShadowMan
+#
+from bilibili import Live, Helper
 
-from bilibili import Live
-import asyncio
+helper = Helper.bliHelper()
 
+print(helper.accounts())
 
-loop = asyncio.get_event_loop_policy()
+# print(Live.LiveBiliBili().listen(1017))
 
-print(Live.LiveBiliBili().listen(1017))

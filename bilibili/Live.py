@@ -9,7 +9,6 @@ import asyncio
 import random
 from bilibili import Utils
 from bilibili import Config
-from bilibili.Helper import Helper
 from bilibili.User import User
 from bilibili.Package import LivePackageGenerator, PackageHandlerProtocol
 
@@ -17,7 +16,10 @@ __all__ = [ 'LiveBiliBili' ]
 
 class LiveBiliBili(object):
 
-    def __init__(self, userInstance = None, *, anonymous = True):
+    def __init__(self, userInstance = None, *, anonymous = True, loop = None):
+
+        self.__loop = loop
+
         if isinstance(userInstance, User):
             self.__uid = userInstance.uid
             self.__userInstance = userInstance
@@ -37,8 +39,8 @@ class LiveBiliBili(object):
             # raise TypeError('listen must be messageHandler')
             messageHandler = Utils.MessageHandler
 
-        generator = LivePackageGenerator(loop = Helper.LoopInstance)
-        if Helper.LoopInstance.is_running() is False:
-            Helper.LoopInstance.run_until_complete(generator.join(roomId, self.__uid, messageHandler))
+        generator = LivePackageGenerator(loop = self.__loop)
+        if self.__loop.is_running() is False:
+            self.__loop.run_until_complete(generator.join(roomId, self.__uid, messageHandler))
         else:
-            Helper.LoopInstance.create_task(generator.join(roomId, self.__uid, messageHandler))
+            self.__loop.create_task(generator.join(roomId, self.__uid, messageHandler))

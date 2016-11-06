@@ -25,6 +25,7 @@ def load(file):
             raise TypeError("file must have a 'write' attribute")
     except Exception as e:
         logging.debug('In Storage: %s' % ( e ))
+        raise
 
 class SessionStorage(dict):
 

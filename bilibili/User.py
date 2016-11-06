@@ -1,12 +1,16 @@
-''' User Module
-
-'''
+#!/usr/bin/env python
+#
+# Copyright (C) 2016 ShadowMan
+#
+#
+#
 
 import re
 import sys
-import json, time
-import requests
+import json
+import time
 import logging
+import requests
 from collections import namedtuple
 from bilibili import Exceptions, Config, TerminalQr, Live, Utils
 

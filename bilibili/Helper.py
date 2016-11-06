@@ -1,6 +1,9 @@
-'''BiliBili Helper
-
-'''
+#!/usr/bin/env python
+#
+# Copyright (C) 2016 ShadowMan
+#
+# bilibili.Helper
+# This module is all toolkit startup
 
 import os
 import logging
@@ -10,103 +13,105 @@ from bilibili import Exceptions, Storage, Config, TerminalQr
 from bilibili.User import User
 from bilibili.User import Account
 
-def bliHelper(QRLogin = True, *, storage = True, account = (None, None), log = True, logfile = None,
-              afterLogin = True, multiUser = False, autoDump = True):
-    if log is True:
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
+def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None,
+              manual_login = True, multi_user = False, auto_dump = True):
+    if log in [ logging.NOTSET, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL ]:
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s %(levelname)-8s %(message)s',
                             datefmt='%d %b %Y %H:%M:%S')
 
     helper = Helper(storage = storage)
-    if helper.accountSize() != 0 and afterLogin is False:
+    if helper.accountSize() != 0 and manual_login is False:
         return helper
 
-    if multiUser is False:
-        multiUser = 1
-
-    for index in range(min(multiUser, Config.MAX_USER_COUNT)):
+    if multi_user is False:
         if isinstance(account, Account):
-            account = [ account ]
-        elif not isinstance(account, list):
-            raise TypeError('Account must be Account or list type')
+            account = [account]
+        elif account is None:
+            account = [ Account(None, None, None) ]
+        else:
+            raise TypeError('multi_user and account, parameter conflicts')
+        multi_user = 1
+    elif multi_user is True and isinstance(account, list):
+        account = list(filter(lambda x: isinstance(x, Account), account))
+        multi_user = len(account)
+    else:
+        raise TypeError('multi_user and account, parameter conflicts')
 
-        try:
-            username, password = account[index]
-        except IndexError:
-            username, password = (None, None)
+    for index in range(min(multi_user, Config.MAX_USER_COUNT)):
+        username, password, key = account[index]
 
         if (username is not None) and (password is not None):
             helper.login(username = username, password = password)
-        elif QRLogin is True:
-            helper.login()
+        elif qr is True:
+            helper.login(qr = True)
         else:
             if helper.accountSize() is 0:
                 raise Exceptions.FatalException('Params error')
 
-    if autoDump is True:
+    if auto_dump is True:
         helper.dump()
 
     return helper
 
 class Helper(object):
-
-    __DUMP_FILE_NAME = 'userList.pkl'
+    __session_file_name = 'bli_session.pkl'
 
     LoopInstance = asyncio.get_event_loop()
 
-    def __init__(self, *, storage = True):
-        self.__userList = {}
-        self.__transaction = None # must be None
+    def __init__(self, *, storage = True, loop = None):
+        self.__user_list = {}
+
+        if loop is None:
+            self.__loop_instance = asyncio.get_event_loop()
+        else:
+            self.__loop = loop
 
         if storage is True:
-            self.__load()
+            self.__load_session_file()
 
-        if not self.LoopInstance.is_running():
-            # call_soon
-            self.LoopInstance.run_forever()
-
-    def login(self, QrLogin = True, *, username = None, password = None, storage = True, alias = None):
+    def login(self, qr = True, *, username = None, password = None, storage = True, alias = None):
         if username is not None and password is not None:
             user = User(username = username, password = password)
-        elif QrLogin is True:
+        elif qr is True:
             user = User(QrLogin = True)
         else:
             raise Exceptions.FatalException('login parameters are incorrect, type not specified')
 
-        self.__userList[alias if alias is not None and isinstance(alias, str) else user.name ] = user
+        self.__user_list[alias if alias is not None and isinstance(alias, str) else user.name] = user
         logging.info('%s Login success' % ( user ))
 
     def dump(self):
-        self.__dump()
+        self.__dump_user_list()
 
     def accountSize(self):
-        return len(self.__userList)
+        return len(self.__user_list)
 
     def isExists(self, name):
-        return name in self.__userList
+        return name in self.__user_list
 
     def accounts(self):
-        return list(self.__userList.keys())
+        return list(self.__user_list.keys())
 
     def select(self, name):
         if self.isExists(name):
-            # self.__transaction = name
-            return Transaction(self.__userList[name])
+            return Transaction(self.__user_list[name])
 
-    def __dump(self):
-        Storage.dump(self.__DUMP_FILE_NAME, self.__userList)
+    def __dump_user_list(self):
+        Storage.dump(self.__session_file_name, self.__user_list)
 
-    def __load(self):
-        if os.path.isfile(self.__DUMP_FILE_NAME) == False:
+    def __load_session_file(self):
+        if os.path.isfile(self.__session_file_name) is False:
             return False
 
-        logging.info('Dump file detected, using a saved session')
-        with Storage.load(self.__DUMP_FILE_NAME) as userList:
-            logging.info('Dump file is loaded, the number of user is {}'.format(len(userList)))
+        logging.info('dump file detected, using saved session')
+        with Storage.load(self.__session_file_name) as user_list:
+            logging.info('Dump file is loaded, the number of user is {}'.format(len(user_list)))
 
-            self.__userList = userList
-            for user in self.__userList:
+            self.__user_list = user_list
+            for user in self.__user_list:
                 logging.info('Updating user profile of {}'.format(user))
-                self.__userList[user].profileUpdate()
+                self.__user_list[user].profileUpdate()
 
 OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
 
