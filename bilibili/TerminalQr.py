@@ -2,7 +2,8 @@
 
 '''
 
-import qrcode, platform
+import qrcode
+import platform
 from bilibili.Exceptions import CreateQrException
 
 __all__ = [ 'create' ]
@@ -36,8 +37,8 @@ class TerminalQr(object):
         self.__padding   = 0
         self.__pixelSize = 0
 
-        self.__detectPadding()
-        self.__splitPixels()
+        self.__detect_image_padding()
+        self.__split_pixels()
 
     def reverse(self):
         TerminalQr.BLACK, TerminalQr.BLANK = TerminalQr.BLANK, TerminalQr.BLACK
@@ -47,15 +48,15 @@ class TerminalQr(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:
-            raise
+            raise exc_val
 
     def __str__(self):
-        return self.__terminalQrCode()
+        return self.__generate_terminal_qr()
 
     def __repr__(self):
         return self.__str__()
 
-    def __terminalQrCode(self):
+    def __generate_terminal_qr(self):
         canvas = ''
         for line in self.__pixels:
             for pixel in line:
@@ -64,7 +65,7 @@ class TerminalQr(object):
 
         return canvas
 
-    def __detectPadding(self):
+    def __detect_image_padding(self):
         for x in range(self.__image.width):
             if self.__image.getpixel((x, x)) == 0:
                 self.__padding = x
@@ -76,7 +77,7 @@ class TerminalQr(object):
             else:
                 break
 
-    def __splitPixels(self):
+    def __split_pixels(self):
         lineSize = self.__image.width + self.__padding * 2
         self.__pixels = [ self.__data[i:i + lineSize] for i in range(0, len(self.__data), lineSize) ]
 
@@ -92,9 +93,3 @@ class UnixMixIn(TerminalQr):
     BLACK = 'MM'
     BLANK = '  '
 
-if __name__ == '__main__':
-    from Config import QrLoginUrl
-
-    with create(QrLoginUrl('abcdefghijklmnopqrstuvwxyz012345')) as qr:
-        qr.reverse()
-        print(qr)

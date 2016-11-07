@@ -8,7 +8,7 @@ import asyncio
 import logging
 from bilibili.Package import PackageHandlerProtocol
 
-def liveAnonymousUID():
+def anonymous_uid():
     return int(100000000000000 + (200000000000000 * random.random()))
 
 class MessageHandler(PackageHandlerProtocol):

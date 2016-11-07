@@ -2,13 +2,15 @@
 
 '''
 
-import pickle, io
+import io
+import os
+import pickle
 import logging
 
 def dump(file, data):
     if isinstance(file, str):
-        with open(file, 'wb') as f:
-            pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+        with open(file, 'wb') as fd:
+            pickle.dump(data, fd, pickle.HIGHEST_PROTOCOL)
     elif hasattr(file, 'write') and hasattr(file, 'read'):
         pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)
     else:
@@ -31,16 +33,18 @@ class SessionStorage(dict):
 
     def __init__(self, file):
         contents = {}
-        if file.seek(0, io.SEEK_SET) == 0 and file.seek(0, io.SEEK_END) > 0:
-            file.seek(0, io.SEEK_SET)
-
-            contents = pickle.load(file)
-
+        if os.path.getsize(file.name):
+            try:
+                contents = pickle.load(file)
+            except Exception as e:
+                print('in SessionStorage::__init__ error', e)
+        else:
+            raise TypeError('in SessionStorage, file empty')
         super(SessionStorage, self).__init__(contents)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
+        if exc_val and exc_tb:
+            raise exc_val

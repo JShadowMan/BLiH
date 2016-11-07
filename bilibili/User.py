@@ -24,19 +24,19 @@ Exp = namedtuple('Exp', 'min current next')
 Profile = namedtuple('Profile', 'name level money exp other')
 
 class User(object):
-    QrAdapter = TerminalQr.create
-    OutFile   = sys.stdout
+    _qr_adapter = TerminalQr.create
+    _output_file = sys.stdout
 
-    def __init__(self, QrLogin = True, *, username = None, password = None, alias = None):
-        self.__sessionObject = self.__initSession()
+    def __init__(self, qr = True, *, username = None, password = None, alias = None):
+        self.__session_object = self.__init_session_object()
 
         if username is not None and password is not None:
-            self.__account = self.__login(username, password)
-        elif QrLogin is True:
-            self.__account = self.__qrLogin()
+            self.__account = self.__login_with_pw(username, password)
+        elif qr is True:
+            self.__account = self.__login_with_qr()
 
-        self.__profile = self.__initProfile()
-        self.__live = self.__initLiveProfile()
+        self.__live = self.__init_live_room_profile()
+        self.__profile = self.__init_profile()
 
     @classmethod
     def factory(cls, username, password, OAuthKey, cookieJar):
@@ -45,7 +45,7 @@ class User(object):
     # HTTP Method: GET
     def get(self, *args, **kwargs):
         try:
-            return self.__sessionObject.get(*args, **kwargs)
+            return self.__session_object.get(*args, **kwargs)
         except requests.exceptions.ConnectionError as e:
             logging.debug('User::get() %s' % ( e ))
             raise Exceptions.NetworkException
@@ -53,18 +53,18 @@ class User(object):
     # HTTP Method: POST
     def post(self, *args, **kwargs):
         try:
-            return self.__sessionObject.post(*args, **kwargs)
+            return self.__session_object.post(*args, **kwargs)
         except requests.exceptions.ConnectionError as e:
             logging.debug('User::post() %s' % ( e ))
             raise Exceptions.NetworkException
 
-    def profileUpdate(self):
-        self.__profile = self.__initProfile()
+    def update_profile(self):
+        self.__profile = self.__init_profile()
 
-    def live(self):
+    def live_profile(self):
         return self.__live
 
-    def __initSession(self):
+    def __init_session_object(self):
         session = requests.Session()
 
         for times in range(Config.RE_LOGIN_COUNT):
@@ -77,28 +77,28 @@ class User(object):
 
         return session
 
-    def __login(self, username, password):
-        key = self.__getOAuthKey()
+    def __login_with_pw(self, username, password):
+        key = self.__get_oauth_key()
 
         # TODO
 
         return Account(username, password, key)
 
-    def __qrLogin(self):
-        key = self.__getOAuthKey()
+    def __login_with_qr(self):
+        key = self.__get_oauth_key()
 
         logging.info('Authentication of identity, using QrLogin')
-        with User.QrAdapter(Config.QrLoginUrl(key)) as qc:
-            print(qc, file = self.OutFile)
+        with User._qr_adapter(Config.QrLoginUrl(key)) as qc:
+            print(qc, file = self._output_file)
 
-        self.__checkLoginInfo(key) # await
+        self.__check_login_status(key) # await
 
         return Account(None, None, key)
 
-    def __initLiveProfile(self):
+    def __init_live_room_profile(self):
         return Live.LiveBiliBili()
 
-    def __getOAuthKey(self):
+    def __get_oauth_key(self):
         logging.info('From the server gets a OAuth key')
         response = self.get(Config.GET_OAUTH_KEY).json()
         try:
@@ -109,7 +109,7 @@ class User(object):
         except Exceptions.NetworkException:
             raise
 
-    def __checkLoginInfo(self, oauthKey):
+    def __check_login_status(self, oauthKey):
         for times in range(Config.RE_LOGIN_COUNT):
             info = None
             for sec in range(0, Config.QR_EXPIRED_TIME, Config.DETECT_LOGIN_STATUS_INTERVAL):
@@ -122,14 +122,14 @@ class User(object):
             else:
                 logging.info('QrCode expired, refresh QrCode ...')
 
-                with self.QrAdapter(Config.QrLoginUrl(oauthKey)) as qc:
-                    print(qc, file = self.OutFile)
+                with self._qr_adapter(Config.QrLoginUrl(oauthKey)) as qc:
+                    print(qc, file = self._output_file)
 
             if info.get('status', None) is True:
                 if 'data' in info and 'url' in info['data']:
                     try:
                         # Gets the child domain cookies ?
-                        # self.__sessionObject.get(info['data']['url']).close()
+                        # self.__session_object.get(info['data']['url']).close()
                         pass
                     except requests.exceptions.ConnectionError:
                         logging.debug('User::__checkLoginInfo')
@@ -139,7 +139,7 @@ class User(object):
             self.__terminate(logging.error, 'The number of retries exceeds the limit.')
 
 
-    def __initProfile(self):
+    def __init_profile(self):
         navJs = self.get(Config.GET_USER_INFO).text
         userInfo = json.loads(re.search('(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
 
@@ -181,7 +181,7 @@ class User(object):
 
     @property
     def cookieJar(self):
-        return self.__sessionObject.cookies
+        return self.__session_object.cookies
 
     @property
     def username(self):
@@ -197,7 +197,7 @@ class User(object):
 
     @property
     def uid(self):
-        return Utils.liveAnonymousUID()
+        return Utils.anonymous_uid()
 
     @name.setter
     def name(self):

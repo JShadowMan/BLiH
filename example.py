@@ -2,11 +2,13 @@
 #
 # Copyright (C) 2016 ShadowMan
 #
-from bilibili import Live, Helper
+import random
+from bilibili import Live, Helper, Config
 
 helper = Helper.bliHelper()
 
-print(helper.accounts())
+for username in helper.accounts():
+    print(helper.select(username).do_daily_sign().message.decode(Config.ENCODING))
 
-# print(Live.LiveBiliBili().listen(1017))
+print(Live.LiveBiliBili().listen(5279))
 

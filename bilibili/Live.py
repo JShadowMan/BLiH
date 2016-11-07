@@ -17,14 +17,15 @@ __all__ = [ 'LiveBiliBili' ]
 class LiveBiliBili(object):
 
     def __init__(self, userInstance = None, *, anonymous = True, loop = None):
-
+        if loop is None:
+            loop = asyncio.get_event_loop()
         self.__loop = loop
 
         if isinstance(userInstance, User):
             self.__uid = userInstance.uid
             self.__userInstance = userInstance
         elif anonymous is True:
-            self.__uid = Utils.liveAnonymousUID()
+            self.__uid = Utils.anonymous_uid()
             self.__userInstance = None
         else:
             raise TypeError

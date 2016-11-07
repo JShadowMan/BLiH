@@ -10,11 +10,11 @@ import logging
 import asyncio
 from collections import namedtuple
 from bilibili import Exceptions, Storage, Config, TerminalQr
-from bilibili.User import User
-from bilibili.User import Account
+from bilibili.User import User, Account
+from bilibili.Transaction import Transaction
 
 def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None,
-              manual_login = True, multi_user = False, auto_dump = True):
+              manual_login = False, multi_user = False, auto_dump = True):
     if log in [ logging.NOTSET, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL ]:
         logging.basicConfig(level=logging.INFO,
                             format='%(asctime)s %(levelname)-8s %(message)s',
@@ -74,7 +74,7 @@ class Helper(object):
         if username is not None and password is not None:
             user = User(username = username, password = password)
         elif qr is True:
-            user = User(QrLogin = True)
+            user = User(qr = True)
         else:
             raise Exceptions.FatalException('login parameters are incorrect, type not specified')
 
@@ -111,37 +111,4 @@ class Helper(object):
             self.__user_list = user_list
             for user in self.__user_list:
                 logging.info('Updating user profile of {}'.format(user))
-                self.__user_list[user].profileUpdate()
-
-OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
-
-class Transaction(object):
-
-    def __init__(self, user):
-        self.__userInstance = user
-
-    def getSign(self):
-        response = self.__userInstance.get(Config.GET_SIGN_INFO).json()
-
-        return OperatorResult(self.__userInstance.name, 'GetSign', False, response.get('data').get('text').encode(Config.ENCODING), {
-            'curMonth': response.get('data').get('curMonth'),
-            'allDays': response.get('data').get('allDays'),
-            'hadSignDays': response.get('data').get('hadSignDays')
-        })
-
-    def doSign(self):
-        response = self.__userInstance.get(Config.LIVE_SIGN_DAILY).json()
-
-        if response.get('code') is 0 and response.get('msg') == 'OK':
-            return OperatorResult(self.__userInstance.name, 'Sign', True,response.get('data').get('text').encode(Config.ENCODING), {
-                'allDays': response.get('data').get('allDays'),
-                'hadSignDays': response.get('data').get('hadSignDays')
-            })
-        else:
-            return OperatorResult(self.__userInstance.name, 'Sign', False, response.get('msg').encode(Config.ENCODING), None)
-
-    def listen(self, roomId):
-        pass
-
-    def close(self):
-        pass
+                self.__user_list[user].update_profile()
