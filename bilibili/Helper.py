@@ -57,8 +57,6 @@ def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, 
 class Helper(object):
     __session_file_name = 'bli_session.pkl'
 
-    LoopInstance = asyncio.get_event_loop()
-
     def __init__(self, *, storage = True, loop = None):
         self.__user_list = {}
 

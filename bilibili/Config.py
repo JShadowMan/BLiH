@@ -7,7 +7,7 @@ from bilibili import Exceptions
 ENCODING = 'UTF-8'
 
 # Max User Count
-MAX_USER_COUNT = 64
+MAX_USER_COUNT = 16
 
 # Live Heartbeat
 LIVE_HEARTBEAT_TIME = 30

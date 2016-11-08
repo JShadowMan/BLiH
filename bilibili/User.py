@@ -9,6 +9,7 @@ import re
 import sys
 import json
 import time
+import aiohttp
 import logging
 import requests
 from collections import namedtuple

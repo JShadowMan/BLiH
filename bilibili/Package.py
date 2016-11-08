@@ -44,11 +44,11 @@ class LivePackageParser(object):
         self.__raw_package = raw_package
 
     @classmethod
-    def factory(cls, rawPackage):
+    def factory(cls, raw_package):
         if cls.__single_instance is None:
             cls.__single_instance = LivePackageParser(None)
 
-        cls.__single_instance.parse(rawPackage)
+        cls.__single_instance.parse(raw_package)
         return cls.__single_instance
 
     @property
@@ -183,11 +183,11 @@ class LivePackageGenerator(object):
     __DM_SEVER_PORT = 788
 
     def __init__(self, *, loop = asyncio.get_event_loop()):
-        self.__loop           = loop
-        self.__listening      = False
-        self.__roomID         = None
-        self.__uid            = None
-        self.__packageHandler = None
+        self.__uid = None
+        self.__loop = loop
+        self.__listening = False
+        self.__live_room_id = None
+        self.__package_handler = None
         self.__loop.set_debug(True)
 
         try:
@@ -197,27 +197,27 @@ class LivePackageGenerator(object):
         except Exception as e:
             print('LivePackageGenerator::__init__() error', e)
 
-    async def join(self, roomId, uid, packageHandler):
-        self.__roomID = roomId
-        self.__uid    = uid
+    async def join(self, live_room_id, uid, package_handler):
+        self.__uid = uid
+        self.__live_room_id = live_room_id
 
-        if callable(packageHandler):
-            handler = packageHandler()
+        if callable(package_handler):
+            handler = package_handler()
 
             if isinstance(handler, PackageHandlerProtocol):
-                self.__packageHandler = handler
+                self.__package_handler = handler
             else:
-                raise TypeError('packageHandler must be callable')
+                raise TypeError('package_handler must be callable')
         else:
-            raise TypeError('packageHandler must be callable')
+            raise TypeError('package_handler must be callable')
 
-        data    = (self.__JOIN_ROOM_BODY_FORMAT % (roomId, uid)).encode(Config.ENCODING)
+        data = (self.__JOIN_ROOM_BODY_FORMAT % (live_room_id, uid)).encode(Config.ENCODING)
         package = self.__package_generator(type = self.__PKG_TYPE_JOIN_ROOM, body = data)
 
         if await self.__send_package(package) is True:
             response = await self.__receive_package()
 
-            if response.type == LivePackageParser.PkgTypeAllowJoinLiveRoom and self.__packageHandler.onAllowJoin():
+            if response.type == LivePackageParser.PkgTypeAllowJoinLiveRoom and self.__package_handler.onAllowJoin():
                 self.__listening = True
 
                 self.__loop.create_task(self.__heartbeat())
@@ -225,22 +225,22 @@ class LivePackageGenerator(object):
                     package = await self.__receive_package()
 
                     if package.type == LivePackageParser.PkgTypeHeartbeatResponse:
-                        self.__packageHandler.onHeartbeatResponse(package.body)
+                        self.__package_handler.onHeartbeatResponse(package.body)
                     elif package.type == LivePackageParser.PkgTypeDanMuMessage:
                         messageType = package.body.__class__.__name__
                         if messageType == 'Message':
-                            self.__packageHandler.onDanMuMessage(package.body)
+                            self.__package_handler.onDanMuMessage(package.body)
                         elif messageType == 'Gift':
-                            self.__packageHandler.onGift(package.body)
+                            self.__package_handler.onGift(package.body)
                         elif messageType == 'Welcome':
-                            self.__packageHandler.onWelcome(package.body)
+                            self.__package_handler.onWelcome(package.body)
 
     async def __heartbeat(self):
         package = self.__package_generator(type = self.__PKG_TYPE_HEARTBEAT)
         while self.__listening is True:
             await asyncio.sleep(Config.LIVE_HEARTBEAT_TIME, loop = self.__loop)
             await self.__send_package(package)
-            logging.debug('Heartbeat send completed (roomId = {}, uid = {})'.format(self.__roomID, self.__uid))
+            logging.debug('Heartbeat send completed (roomId = {}, uid = {})'.format(self.__live_room_id, self.__uid))
 
     def __package_generator(self, *, type = 0xFFFFFFFF, body = None):
         if type not in (self.__PKG_TYPE_HEARTBEAT, self.__PKG_TYPE_JOIN_ROOM):
@@ -258,7 +258,7 @@ class LivePackageGenerator(object):
 
         return True
 
-    async def __receive_package(self, *, rawPackage = False):
+    async def __receive_package(self, *, need_raw_package = False):
         try:
             buffer = b''
             while len(buffer) < 4:
@@ -271,17 +271,17 @@ class LivePackageGenerator(object):
                 packageLength -= len(temp)
                 buffer += temp
 
-            rawPackage = RawPackage(*struct.unpack('!IHHII{}s'.format(len(buffer) - 16), buffer))
-            if rawPackage is True:
-                return rawPackage
+            raw_package = RawPackage(*struct.unpack('!IHHII{}s'.format(len(buffer) - 16), buffer))
+            if need_raw_package is True:
+                return raw_package
             else:
-                return LivePackageParser.factory(rawPackage).package
+                return LivePackageParser.factory(raw_package).package
         except struct.error as e:
             raise Exceptions.FatalException('Receive package error occurs. internal error.')
         except ConnectionAbortedError as e:
             print('[EXCEPTION] FUCK', e)
 
-    def ___create_package(self, *, pkgLength = 0, headerLength = __PKG_HEADER_LENGTH,
+    def ___create_package(self, *, package_length = 0, header_length = __PKG_HEADER_LENGTH,
                           version = __PKG_API_VERSION, type = 0, unknown = __UNKNOWN_FIELD_VALUE, body = None):
         if isinstance(body, str):
             body = body.encode(Config.ENCODING)
@@ -289,12 +289,12 @@ class LivePackageGenerator(object):
         if body is not None and not isinstance(body, bytes):
             raise TypeError('LivePackageGenerator::___makePackage params error')
 
-        pkgLength = headerLength + len(body) if body is not None else 0
+        package_length = header_length + len(body) if body is not None else 0
 
         try:
             if body is None:
-                return struct.pack('!IHHII', pkgLength, headerLength, version, type, unknown)
-            return struct.pack('!IHHII{}s'.format(len(body)), pkgLength, headerLength, version, type, unknown, body)
+                return struct.pack('!IHHII', package_length, header_length, version, type, unknown)
+            return struct.pack('!IHHII{}s'.format(len(body)), package_length, header_length, version, type, unknown, body)
         except Exception as e:
             pass
 
