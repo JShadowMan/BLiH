@@ -330,7 +330,7 @@ GET_ROOM_INFO = 'http://live.bilibili.com/live/getInfo'
     Response:
         type: JSON
 '''
-USER_ONLIVE_HEART = 'http://live.bilibili.com/User/userOnlineHeart'
+USER_ONLINE_HEART = 'http://live.bilibili.com/User/userOnlineHeart'
 
 def QrLoginUrl(oAuthKey = None):
     if oAuthKey is None:

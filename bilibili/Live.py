@@ -33,8 +33,6 @@ class LiveBiliBili(object):
         else:
             raise TypeError
 
-        self.__listenList = {}
-
     async def listen(self, live_room_address, message_handler, *, live_room_id = None, alias = None):
         if live_room_id is None:
             if isinstance(live_room_address, int):
@@ -45,6 +43,9 @@ class LiveBiliBili(object):
                 raise TypeError('live_room_address must be str or int')
 
             live_room_id = await Utils.get_real_room_id(self.__loop, live_room_address)
+            if live_room_id is None:
+                raise Exception('live room not found in {}'.format(live_room_address))
+            live_room_id = int(live_room_id)
         elif not isinstance(live_room_id, int):
             live_room_id = int(live_room_id)
 
@@ -55,7 +56,5 @@ class LiveBiliBili(object):
             raise TypeError('listen require message_handler')
 
         generator = LivePackageGenerator(loop = self.__loop)
-        if self.__loop.is_running() is False:
-            self.__loop.run_until_complete(generator.join(live_room_id, self.__uid, message_handler))
-        else:
-            self.__loop.create_task(generator.join(live_room_id, self.__uid, message_handler))
+
+        return await generator.join(live_room_id, self.__uid, message_handler)

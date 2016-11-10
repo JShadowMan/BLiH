@@ -28,27 +28,32 @@ class LivePackageParser(object):
 
     __single_instance = None
 
-    def __init__(self, raw_package = None):
+    def __init__(self, room_id, raw_package = None):
         if raw_package is None:
             return
 
         if not isinstance(raw_package, RawPackage):
             raise Exceptions.FatalException('Internal error occurs, raw_package not allow')
 
+        self.__room_id = room_id
         self.__raw_package = raw_package
 
-    def parse(self, raw_package):
+    def parse(self, raw_package, room_id, other_data):
         if not isinstance(raw_package, RawPackage):
             raise Exceptions.FatalException('Internal error occurs, raw_package not allow')
 
+        self.__room_id = room_id
         self.__raw_package = raw_package
+        self.__other_data = {}
 
     @classmethod
-    def factory(cls, raw_package):
+    def factory(cls, raw_package, room_id, other_data = None):
         if cls.__single_instance is None:
             cls.__single_instance = LivePackageParser(None)
+        if other_data is None:
+            other_data = {}
 
-        cls.__single_instance.parse(raw_package)
+        cls.__single_instance.parse(raw_package, room_id, other_data)
         return cls.__single_instance
 
     @property
@@ -125,28 +130,28 @@ class LivePackageParser(object):
     def ___parse_dan_mu_message(self, contents):
         Message = namedtuple('Message', 'name message other')
 
-        return Message(contents.get('info', {})[2][1], contents.get('info', {})[1], {
-            # ...
-        })
+        return Message(contents.get('info', {})[2][1], contents.get('info', {})[1], dict({
+            'roomId': self.__room_id
+        }, **self.__other_data))
 
     def ___parse_welcome_message(self, contents):
         Welcome = namedtuple('Welcome', 'uid name vip admin other')
 
         return Welcome(contents.get('data', {}).get('uid', None), contents.get('data', {}).get('uname', None),
                        True if contents.get('data', {}).get('vip', None) == 1 else False,
-                       True if contents.get('data', {}).get('isadmin', None) == 1 else False, {
+                       True if contents.get('data', {}).get('isadmin', None) == 1 else False, dict({
             'roomId': contents.get('roomid', None)
-        })
+        }, **self.__other_data))
 
     def ___parse_send_gift_message(self, contents):
         Gift = namedtuple('Gift', 'uid name gift count time other')
 
         return Gift(contents.get('data', {}).get('uid', None), contents.get('data', {}).get('uname', None),
                     contents.get('data', {}).get('giftName', None), contents.get('data', {}).get('num', None),
-                    contents.get('data', {}).get('timestamp', None), {
+                    contents.get('data', {}).get('timestamp', None), dict({
             'roomId': contents.get('roomid', None)
             # top list
-        })
+        }, **self.__other_data))
 
     @property
     def package(self):
@@ -174,7 +179,7 @@ class LivePackageGenerator(object):
     __UNKNOWN_FIELD_VALUE = 1
 
     # Join Room Package Body Format
-    __JOIN_ROOM_BODY_FORMAT = '{ "roomid": %s, "uid": %s }'
+    __join_live_room_request_body = '{ "roomid": %s, "uid": %s }'
 
     # DanMu Server Address
     __DM_SERVER_ADDRESS = 'dm.live.bilibili.com'
@@ -182,13 +187,13 @@ class LivePackageGenerator(object):
     # DanMu Server Port
     __DM_SEVER_PORT = 788
 
-    def __init__(self, *, loop = asyncio.get_event_loop()):
+    def __init__(self, extra_data = None, *, loop = asyncio.get_event_loop()):
         self.__uid = None
         self.__loop = loop
         self.__listening = False
+        self.__extra_data = extra_data if isinstance(extra_data, dict) else {}
         self.__live_room_id = None
         self.__package_handler = None
-        self.__loop.set_debug(True)
 
         try:
             self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -198,8 +203,11 @@ class LivePackageGenerator(object):
             print('LivePackageGenerator::__init__() error', e)
 
     async def join(self, live_room_id, uid, package_handler):
-        self.__uid = uid
-        self.__live_room_id = live_room_id
+        if isinstance(live_room_id, int) and isinstance(uid, int):
+            self.__uid = uid
+            self.__live_room_id = live_room_id
+        else:
+            raise TypeError('live_room_id and uid muse be int type')
 
         if callable(package_handler):
             handler = package_handler()
@@ -207,17 +215,17 @@ class LivePackageGenerator(object):
             if isinstance(handler, PackageHandlerProtocol):
                 self.__package_handler = handler
             else:
-                raise TypeError('package_handler must be callable')
+                raise TypeError('package_handler must base for PackageHandlerProtocol')
         else:
             raise TypeError('package_handler must be callable')
 
-        data = (self.__JOIN_ROOM_BODY_FORMAT % (live_room_id, uid)).encode(Config.ENCODING)
+        data = (self.__join_live_room_request_body % (live_room_id, uid)).encode(Config.ENCODING)
         package = self.__package_generator(type = self.__PKG_TYPE_JOIN_ROOM, body = data)
 
         if await self.__send_package(package) is True:
             response = await self.__receive_package()
 
-            if response.type == LivePackageParser.PkgTypeAllowJoinLiveRoom and self.__package_handler.onAllowJoin():
+            if response.type == LivePackageParser.PkgTypeAllowJoinLiveRoom and self.__package_handler.on_allow_join():
                 self.__listening = True
 
                 self.__loop.create_task(self.__heartbeat())
@@ -225,15 +233,15 @@ class LivePackageGenerator(object):
                     package = await self.__receive_package()
 
                     if package.type == LivePackageParser.PkgTypeHeartbeatResponse:
-                        self.__package_handler.onHeartbeatResponse(package.body)
+                        self.__package_handler.on_heartbeat_response(package.body)
                     elif package.type == LivePackageParser.PkgTypeDanMuMessage:
                         messageType = package.body.__class__.__name__
                         if messageType == 'Message':
-                            self.__package_handler.onDanMuMessage(package.body)
+                            self.__package_handler.on_dan_mu_message(package.body)
                         elif messageType == 'Gift':
-                            self.__package_handler.onGift(package.body)
+                            self.__package_handler.on_gift_message(package.body)
                         elif messageType == 'Welcome':
-                            self.__package_handler.onWelcome(package.body)
+                            self.__package_handler.on_welcome_message(package.body)
 
     async def __heartbeat(self):
         package = self.__package_generator(type = self.__PKG_TYPE_HEARTBEAT)
@@ -244,7 +252,7 @@ class LivePackageGenerator(object):
 
     def __package_generator(self, *, type = 0xFFFFFFFF, body = None):
         if type not in (self.__PKG_TYPE_HEARTBEAT, self.__PKG_TYPE_JOIN_ROOM):
-            pass
+            raise Exceptions.FatalException('error occurs with internal error')
 
         if isinstance(body, str):
             body = body.encode(Config.ENCODING)
@@ -255,7 +263,6 @@ class LivePackageGenerator(object):
 
     async def __send_package(self, package):
         await self.__loop.sock_sendall(self.__sock, package)
-
         return True
 
     async def __receive_package(self, *, need_raw_package = False):
@@ -275,11 +282,11 @@ class LivePackageGenerator(object):
             if need_raw_package is True:
                 return raw_package
             else:
-                return LivePackageParser.factory(raw_package).package
+                return LivePackageParser.factory(raw_package, self.__live_room_id, self.__extra_data).package
         except struct.error as e:
-            raise Exceptions.FatalException('Receive package error occurs. internal error.')
+            raise Exceptions.FatalException('Receive package error occurs. internal error.', e)
         except ConnectionAbortedError as e:
-            print('[EXCEPTION] FUCK', e)
+            logging.debug('Package::__receive_package error', e)
 
     def ___create_package(self, *, package_length = 0, header_length = __PKG_HEADER_LENGTH,
                           version = __PKG_API_VERSION, type = 0, unknown = __UNKNOWN_FIELD_VALUE, body = None):
@@ -312,25 +319,25 @@ class PackageHandlerProtocol(object, metaclass = abc.ABCMeta):
         pass
 
     @abc.abstractclassmethod
-    def onAllowJoin(self):
+    def on_allow_join(self):
         return True
 
     @abc.abstractclassmethod
-    def onHeartbeatResponse(self, contents):
+    def on_heartbeat_response(self, contents):
         pass
 
     @abc.abstractclassmethod
-    def onDanMuMessage(self, contents):
+    def on_dan_mu_message(self, contents):
         pass
 
     @abc.abstractclassmethod
-    def onGift(self, contents):
+    def on_gift_message(self, contents):
         pass
 
     @abc.abstractclassmethod
-    def onWelcome(self, contents):
+    def on_welcome_message(self, contents):
         pass
 
     @abc.abstractclassmethod
-    def onError(self, package):
+    def on_error_occurs(self, package):
         pass
