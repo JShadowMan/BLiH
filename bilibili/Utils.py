@@ -56,3 +56,6 @@ class MessageHandler(PackageHandlerProtocol):
 
     def on_gift_message(self, contents):
         print(contents)
+
+def check_args(args):
+    pass
