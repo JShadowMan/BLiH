@@ -9,7 +9,9 @@ import aiohttp
 import asyncio
 import logging
 import requests
+import xml.etree.cElementTree as ET
 from bilibili.Package import PackageHandlerProtocol
+from bilibili import Config
 
 def anonymous_uid():
     return int(100000000000000 + (200000000000000 * random.random()))
@@ -32,6 +34,17 @@ async def get_real_room_id(loop, live_room_address):
         return re.search(r'(?<=ROOMID\s=\s)([\d]+)', response).group()
     except Exception as e:
         logging.debug('Utils.get_real_room_id error', e)
+
+async def get_dan_mu_server_info(loop, live_room_id = None):
+    request_server_address = 'http://live.bilibili.com/api/player?id=cid:{}'
+
+    try:
+        response = await fetch(loop, url = request_server_address.format(live_room_id))
+
+        root = ET.fromstring('<root>' + response + '</root>')
+        return root.find('server').text, Config.LIVE_SERVER_PORT
+    except Exception as e:
+        logging.debug('Utils.get_dan_mu_server_info error', e)
 
 class MessageHandler(PackageHandlerProtocol):
 

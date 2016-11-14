@@ -36,7 +36,6 @@ class User(object):
         elif qr is True:
             self.__account = self.__login_with_qr()
 
-        self.__live = self.__init_live_room_profile()
         self.__profile = self.__init_profile()
 
     @classmethod
@@ -62,9 +61,6 @@ class User(object):
     def update_profile(self):
         self.__profile = self.__init_profile()
 
-    def live_profile(self):
-        return self.__live
-
     def __init_session_object(self):
         session = requests.Session()
 
@@ -89,15 +85,12 @@ class User(object):
         key = self.__get_oauth_key()
 
         logging.info('Authentication of identity, using QrLogin')
-        with User._qr_adapter(Config.QrLoginUrl(key)) as qc:
+        with User._qr_adapter(Config.login_with_qr_url(key)) as qc:
             print(qc, file = self._output_file)
 
         self.__check_login_status(key) # await
 
         return Account(None, None, key)
-
-    def __init_live_room_profile(self):
-        return Live.LiveBiliBili()
 
     def __get_oauth_key(self):
         logging.info('From the server gets a OAuth key')
@@ -123,7 +116,7 @@ class User(object):
             else:
                 logging.info('QrCode expired, refresh QrCode ...')
 
-                with self._qr_adapter(Config.QrLoginUrl(oauthKey)) as qc:
+                with self._qr_adapter(Config.login_with_qr_url(oauthKey)) as qc:
                     print(qc, file = self._output_file)
 
             if info.get('status', None) is True:
@@ -142,7 +135,7 @@ class User(object):
 
     def __init_profile(self):
         navJs = self.get(Config.GET_USER_INFO).text
-        userInfo = json.loads(re.search('(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
+        userInfo = json.loads(re.search(r'(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
 
         # TODO. Perfect this
         name  = userInfo.get('uname', None)
@@ -181,10 +174,6 @@ class User(object):
         return self.__profile.money
 
     @property
-    def cookieJar(self):
-        return self.__session_object.cookies
-
-    @property
     def username(self):
         return self.__account.username
 
@@ -193,14 +182,14 @@ class User(object):
         return self.__account.password
 
     @property
-    def oauthKey(self):
+    def oauth_key(self):
         return self.__account.key
 
     @property
     def uid(self):
         return Utils.anonymous_uid()
 
-    @name.setter
-    def name(self):
-        # Change name
-        pass
+    @property
+    def face(self):
+        return self.__profile.other['face']
+

@@ -8,7 +8,7 @@ import socket
 import asyncio
 import logging
 from collections import namedtuple
-from bilibili import Config, Exceptions
+from bilibili import Config, Exceptions, Utils
 
 RawPackage    = namedtuple('RawPackage', 'pkgLength headerLength version type unknown body')
 PackageHeader = namedtuple('PackageHeader', 'pkgLength headerLength version type unknown')
@@ -102,8 +102,12 @@ class LivePackageParser(object):
     @property
     def body(self):
         if self.type == self.PkgTypeHeartbeatResponse:
-            HeartbeatResponse = namedtuple('HeartbeatResponse', 'peopleCount')
-            return HeartbeatResponse(struct.unpack('!I', self.__raw_package.body)[0])
+            HeartbeatResponse = namedtuple('HeartbeatResponse', 'count other')
+
+            count = struct.unpack('!I', self.__raw_package.body)[0]
+            return HeartbeatResponse(count, {
+                'roomId': self.__room_id
+            })
         elif self.type == self.PkgTypeAllowJoinLiveRoom:
             return None
         elif self.type == self.PkgTypeDanMuMessage:
@@ -181,26 +185,14 @@ class LivePackageGenerator(object):
     # Join Room Package Body Format
     __join_live_room_request_body = '{ "roomid": %s, "uid": %s }'
 
-    # DanMu Server Address
-    __DM_SERVER_ADDRESS = 'dm.live.bilibili.com'
-
-    # DanMu Server Port
-    __DM_SEVER_PORT = 788
-
     def __init__(self, extra_data = None, *, loop = asyncio.get_event_loop()):
         self.__uid = None
         self.__loop = loop
+        self.__sock = None
         self.__listening = False
         self.__extra_data = extra_data if isinstance(extra_data, dict) else {}
         self.__live_room_id = None
         self.__package_handler = None
-
-        try:
-            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.__sock.connect((self.__DM_SERVER_ADDRESS, self.__DM_SEVER_PORT))
-            self.__sock.setblocking(False)
-        except Exception as e:
-            print('LivePackageGenerator::__init__() error', e)
 
     async def join(self, live_room_id, uid, package_handler):
         if isinstance(live_room_id, int) and isinstance(uid, int):
@@ -208,6 +200,13 @@ class LivePackageGenerator(object):
             self.__live_room_id = live_room_id
         else:
             raise TypeError('live_room_id and uid muse be int type')
+
+        try:
+            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.__sock.connect(await Utils.get_dan_mu_server_info(self.__loop, live_room_id))
+            self.__sock.setblocking(False)
+        except Exception as e:
+            print('LivePackageGenerator::__init__() error', e)
 
         if callable(package_handler):
             handler = package_handler()

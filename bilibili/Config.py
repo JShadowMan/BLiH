@@ -12,6 +12,9 @@ MAX_USER_COUNT = 16
 # Live Heartbeat
 LIVE_HEARTBEAT_TIME = 30
 
+# Live Server Port
+LIVE_SERVER_PORT = 788
+
 # Init Cookies
 INIT_COOKIES_START = 'https://passport.bilibili.com/login'
 
@@ -39,9 +42,6 @@ RE_LOGIN_COUNT = 3
 # Captcha Address
 CAPTCHA_URL   = 'https://passport.bilibili.com/captcha'
 
-# Video Address
-VIDEO_URL = 'http://www.bilibili.com/video/av%s/'
-
 # Live Room Address
 LIVE_URL  = 'http://live.bilibili.com/%s'
 
@@ -60,6 +60,7 @@ GET_SIGN_INFO = 'http://live.bilibili.com/sign/GetSignInfo'
 ''' Sign Daily
 
     Request:
+        type: GET
 
     Response:
         JSON
@@ -321,29 +322,12 @@ GET_CAPTCHA = 'http://live.bilibili.com/freeSilver/getCaptcha?ts='
 '''
 GET_ROOM_INFO = 'http://live.bilibili.com/live/getInfo'
 
-# Live Room Online Heart, 5min
-''' /User/userOnlineHeart
-
-    Request:
-        type: POST
-
-    Response:
-        type: JSON
-'''
-USER_ONLINE_HEART = 'http://live.bilibili.com/User/userOnlineHeart'
-
-def QrLoginUrl(oAuthKey = None):
-    if oAuthKey is None:
-        raise Exceptions.ConfigException('oAuthKey parameter must be specified')
+def login_with_qr_url(oauth_key = None):
+    if oauth_key is None:
+        raise Exceptions.ConfigException('oauth_key parameter must be specified')
     else:
-        if len(oAuthKey) != 32:
-            raise Exceptions.ConfigException('oAuthKey format error, length is not 32')
-        return QR_LOGIN_URL % oAuthKey
+        if len(oauth_key) != 32:
+            raise Exceptions.ConfigException('oauth_key format error, length is not 32')
+        return QR_LOGIN_URL % oauth_key
 
-def videoUrl(av = None):
-    if av is None:
-        raise Exceptions.ConfigException('avCode parameter must be specified')
-    if not isinstance(av, int):
-        raise Exceptions.ConfigException('avCode must be int type')
-    return VIDEO_URL % av
 

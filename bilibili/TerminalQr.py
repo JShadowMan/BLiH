@@ -16,6 +16,8 @@ def create(content = None, *, border = 1):
     qr.add_data(content)
     qr.make(fit = True)
 
+    print(content)
+
     if platform.system() == 'Windows':
         return WindowsMixIn(qr.make_image(), content)
     elif platform.system() == 'Linux':

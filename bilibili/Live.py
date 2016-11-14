@@ -58,3 +58,6 @@ class LiveBiliBili(object):
         generator = LivePackageGenerator(loop = self.__loop)
 
         return await generator.join(live_room_id, self.__uid, message_handler)
+
+    async def get_live_room_info(self, live_room_id):
+        pass
