@@ -2,21 +2,27 @@
 #
 # Copyright (C) 2016 ShadowMan
 #
+import asyncio
 import logging
 from collections import namedtuple
-from bilibili import Config, User
+from bilibili import Config, User, Exceptions, Utils
 
 OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
 
 class Transaction(object):
 
-    def __init__(self, user):
+    def __init__(self, user, loop = None):
         if isinstance(user, User.User):
             self.__user_instance = user
 
-            self.__own_live_info = None
+            self.__own_live_profile = None
         else:
             raise TypeError('user is not User type')
+
+        if loop is None:
+            self.__loop = asyncio.get_event_loop()
+        else:
+            self.__loop = loop
 
     def get_sign_info(self):
         response = self.http_get(Config.GET_SIGN_INFO).json()
@@ -46,19 +52,19 @@ class Transaction(object):
     def listen(self, live_room_id):
         pass
 
-    def get_own_live_info(self):
-        if self.__own_live_info is not None:
-            return self.__own_live_info
+    def get_own_live_profile(self):
+        if self.__own_live_profile is not None:
+            return self.__own_live_profile
 
-        self.update_own_live_info()
-        return self.__own_live_info
+        self.update_own_live_profile()
+        return self.__own_live_profile
 
-    def update_own_live_info(self):
+    def update_own_live_profile(self):
         response = self.http_get(Config.GET_USER_LIVE_INFO).json()
         response = response.get('data', {})
 
         LiveUserInfo = namedtuple('LiveUserInfo', 'name silver gold level exp achieve identity')
-        self.__own_live_info = LiveUserInfo(
+        self.__own_live_profile = LiveUserInfo(
             response.get('uname'), response.get('silver'), response.get('gold'), response.get('user_level'), {
                 'next_exp': response.get('user_next_intimacy'),
                 'current_exp': response.get('user_intimacy'),
@@ -151,11 +157,53 @@ class Transaction(object):
     def get_capture(self):
         pass
 
-    def get_live_room_info(self, live_room_id):
+    async def get_live_room_profile(self, live_room_id = None):
+        if live_room_id is None:
+            live_room_id = 0
+        elif not isinstance(live_room_id, int):
+            if isinstance(live_room_id, str) and live_room_id.isalnum():
+                live_room_id = int(live_room_id)
+            else:
+                raise TypeError('live_room_id must be int')
+
+        live_room_id = await Utils.auto_get_real_room_id(self.__loop, live_room_id)
+        return await self.update_live_room_profile(live_room_id)
+
+    async def update_live_room_profile(self, live_room_id):
+        if not isinstance(live_room_id, int):
+            raise TypeError('live_room_id must be int')
         payload = {
             'roomid': live_room_id
         }
         response = self.http_get(Config.GET_ROOM_INFO, params = payload).json()
+        response = response.get('data', {})
+
+        LiveRoomProfile = namedtuple('LiveRoomProfile', 'master_id master_name live_room_id live_status \
+            live_room_title live_room_fans_count live_rom_gift_top live_room_all_gift is_attention')
+
+        return LiveRoomProfile(
+            # master_id
+            response.get('MASTERID'),
+            # master_name
+            response.get('ANCHOR_NICK_NAME'),
+            # live_room_id
+            response.get('ROOMID'),
+            # live_status
+            response.get('LIVE_STATUS') == 'LIVE',
+            # live_room_title
+            response.get('ROOMTITLE'),
+            # live_room_fans_count
+            response.get('FANS_COUNT'),
+            # live_rom_gift_top
+            [ { 'uid': u['uid'], 'name': u['uname'], 'coin': u['coin'] } for u in response.get('GIFT_TOP') ],
+            # live_room_all_gift
+            response['RCOST'],
+            # is_attention
+            response['IS_STAR']
+        )
+
+    def get_own_live_room_id(self):
+        pass
 
     def http_get(self, *args, **kwargs):
         return self.__user_instance.get(*args, **kwargs)

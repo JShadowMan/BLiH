@@ -10,6 +10,7 @@ import asyncio
 import logging
 import requests
 import xml.etree.cElementTree as ET
+from urllib.parse import urljoin
 from bilibili.Package import PackageHandlerProtocol
 from bilibili import Config
 
@@ -27,9 +28,25 @@ async def fetch(loop, *args, **kwargs):
     except Exception as e:
         logging.debug('in utils.fetch error', e)
 
+async def auto_get_real_room_id(loop, live_room_address, *, live_room_id = None):
+    if live_room_id is None:
+        if isinstance(live_room_address, int):
+            live_room_address = str(live_room_address)
+        if isinstance(live_room_address, str) and live_room_address.isalnum():
+            live_room_address = urljoin(Config.LIVE_ROOM_ADDRESS_PREFIX, live_room_address)
+        elif not isinstance(live_room_address, str):
+            raise TypeError('live_room_address must be str or int')
+
+        live_room_id = await get_real_room_id(loop, live_room_address)
+        if live_room_id is None:
+            raise Exception('live room not found in {}'.format(live_room_address))
+        live_room_id = int(live_room_id)
+    elif not isinstance(live_room_id, int):
+        live_room_id = int(live_room_id)
+    return live_room_id
+
 async def get_real_room_id(loop, live_room_address):
     response = await fetch(loop, url = live_room_address)
-
     try:
         return re.search(r'(?<=ROOMID\s=\s)([\d]+)', response).group()
     except Exception as e:

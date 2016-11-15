@@ -47,8 +47,7 @@ class User(object):
         try:
             return self.__session_object.get(*args, **kwargs)
         except requests.exceptions.ConnectionError as e:
-            logging.debug('User::get() %s' % ( e ))
-            raise Exceptions.NetworkException
+            raise Exceptions.NetworkException('request timeout')
 
     # HTTP Method: POST
     def post(self, *args, **kwargs):

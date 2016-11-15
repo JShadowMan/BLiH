@@ -7,7 +7,6 @@ import re
 import requests
 import asyncio
 import random
-from urllib.parse import urljoin
 from bilibili import Utils
 from bilibili import Config
 from bilibili.User import User
@@ -16,8 +15,6 @@ from bilibili.Package import LivePackageGenerator, PackageHandlerProtocol
 __all__ = [ 'LiveBiliBili' ]
 
 class LiveBiliBili(object):
-
-    _live_room_address_prefix = 'http://live.bilibili.com/'
 
     def __init__(self, user_instance = None, *, anonymous = True, loop = None):
         if loop is None:
@@ -34,29 +31,14 @@ class LiveBiliBili(object):
             raise TypeError
 
     async def listen(self, live_room_address, message_handler, *, live_room_id = None, alias = None):
-        if live_room_id is None:
-            if isinstance(live_room_address, int):
-                live_room_address = str(live_room_address)
-            if isinstance(live_room_address, str) and live_room_address.isalnum():
-                live_room_address = urljoin(self._live_room_address_prefix, live_room_address)
-            elif not isinstance(live_room_address, str):
-                raise TypeError('live_room_address must be str or int')
-
-            live_room_id = await Utils.get_real_room_id(self.__loop, live_room_address)
-            if live_room_id is None:
-                raise Exception('live room not found in {}'.format(live_room_address))
-            live_room_id = int(live_room_id)
-        elif not isinstance(live_room_id, int):
-            live_room_id = int(live_room_id)
+        live_room_id = await Utils.auto_get_real_room_id(self.__loop, live_room_address, live_room_id = live_room_id)
 
         if alias is None:
             alias = 'live_room_{}'.format(live_room_id)
-
         if message_handler is None:
             raise TypeError('listen require message_handler')
 
         generator = LivePackageGenerator(loop = self.__loop)
-
         return await generator.join(live_room_id, self.__uid, message_handler)
 
     async def get_live_room_info(self, live_room_id):

@@ -27,6 +27,9 @@ QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey=%s'
 # Check Login Info
 LOGIN_INFO_URL = 'https://passport.bilibili.com/qrcode/getLoginInfo'
 
+# Live Room Prefix
+LIVE_ROOM_ADDRESS_PREFIX = 'http://live.bilibili.com/'
+
 # Expiration time is 3 minutes. To be safe, on that basis minus 5 seconds
 QR_EXPIRED_TIME = 3 * 60 - 5
 

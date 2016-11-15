@@ -14,14 +14,17 @@ from bilibili.User import User, Account
 from bilibili.Transaction import Transaction
 
 def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None,
-              manual_login = False, multi_user = False, auto_dump = True):
+              manual_login = False, multi_user = False, auto_dump = True, loop = None):
     if log not in [ logging.NOTSET, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL, logging.DEBUG ]:
         log = logging.INFO
     logging.basicConfig(level = log,
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%d %b %Y %H:%M:%S')
 
-    helper = Helper(storage = storage)
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
+    helper = Helper(storage = storage, loop = loop)
     if helper.accountSize() != 0 and manual_login is False:
         if multi_user is True or multi_user is False:
             return helper
@@ -71,7 +74,7 @@ class Helper(object):
         self.__user_list = {}
 
         if loop is None:
-            self.__loop_instance = asyncio.get_event_loop()
+            self.__loop = asyncio.get_event_loop()
         else:
             self.__loop = loop
 
@@ -103,7 +106,7 @@ class Helper(object):
 
     def select(self, name):
         if self.is_exists(name):
-            return Transaction(self.__user_list[name])
+            return Transaction(self.__user_list[name], loop = self.__loop)
 
     def get_user(self, name):
         if self.is_exists(name):
