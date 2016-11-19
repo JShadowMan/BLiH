@@ -6,9 +6,7 @@ import re
 import sys
 import random
 import aiohttp
-import asyncio
 import logging
-import requests
 import xml.etree.cElementTree as ET
 from urllib.parse import urljoin
 from bilibili.Package import PackageHandlerProtocol
@@ -39,7 +37,7 @@ async def auto_get_real_room_id(loop, live_room_address, *, live_room_id = None)
 
         live_room_id = await get_real_room_id(loop, live_room_address)
         if live_room_id is None:
-            raise Exception('live room not found in {}'.format(live_room_address))
+            raise Exception('live room not found of {}'.format(live_room_address))
         live_room_id = int(live_room_id)
     elif not isinstance(live_room_id, int):
         live_room_id = int(live_room_id)
