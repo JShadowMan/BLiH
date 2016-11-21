@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections import namedtuple
 from bs4 import BeautifulSoup
-from bilibili import Config, User, Exceptions, Utils
+from bilibili import Config, User, Exceptions, Utils, Live
 
 OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
 
@@ -19,6 +19,9 @@ class Transaction(object):
             self.__own_live_room_id = None
             self.__own_master_profile = None
             self.__own_live_profile = None
+
+            self.__own_wear_medal = None
+            self.__own_medal_list = None
         else:
             raise TypeError('user is not User type')
 
@@ -52,7 +55,14 @@ class Transaction(object):
         else:
             return OperatorResult(self.get_user_name(), 'do_daily_sign', False, response.get('msg'), None)
 
-    async def listen(self, live_room_id):
+    async def listen(self, live_room_id, handle = None):
+        if not isinstance(live_room_id, int):
+            raise TypeError('live_room_id must be int type')
+        if isinstance(handle, Live.PackageHandlerProtocol):
+            raise TypeError('handle must be base PackageHandlerProtocol')
+        asyncio.ensure_future(Live.LiveBiliBili(loop = self.__loop).listen(live_room_id, handle))
+
+    async def multi_listen(self, *live_room_list, handle):
         # TODO
         pass
 
@@ -66,23 +76,40 @@ class Transaction(object):
         response = self.http_get(Config.GET_USER_LIVE_INFO).json()
         response = response.get('data', {})
 
-        LiveUserInfo = namedtuple('LiveUserInfo', 'name silver gold level exp achieve identity room_id \
+        LiveProfile = namedtuple('LiveProfile', 'name silver gold level exp achieve identity room_id \
             master_profile live_room_profile')
+        Exp = namedtuple('Exp', 'next_exp current_exp level_rank')
 
         self.__own_live_room_id = await self.get_own_live_room_id()
         own_live_master_profile = await self.get_own_master_info()
         live_room_profile = await self.get_live_room_profile(self.__own_live_room_id)
-        self.__own_live_profile = LiveUserInfo(
-            response.get('uname'), response.get('silver'), response.get('gold'), response.get('user_level'), {
-                'next_exp': response.get('user_next_intimacy'),
-                'current_exp': response.get('user_intimacy'),
-                'level_rank': response.get('user_level_rank')
-            }, response.get('achieve'), {
-                'vip': response.get('vip') != 0,
-                'svip': response.get('svip') != 0
-            },
+        self.__own_live_profile = LiveProfile(
+            # name
+            response.get('uname'),
+            # silver
+            response.get('silver'),
+            # gold
+            response.get('gold'),
+            # level
+            response.get('user_level'),
+            # exp
+            Exp(
+                # next_exp
+                response.get('user_next_intimacy'),
+                # current_exp
+                response.get('user_intimacy'),
+                # level_rank
+                response.get('user_level_rank')
+            ),
+            # achieve
+            response.get('achieve'),
+            # identity
+            { 'vip': response.get('vip') != 0, 'svip': response.get('svip') != 0 },
+            # room_id
             self.__own_live_room_id,
+            # master_profile
             own_live_master_profile,
+            # live_room_profile
             live_room_profile
         )
         return self.__own_live_profile
@@ -117,26 +144,110 @@ class Transaction(object):
         }
         response = self.http_get(Config.GET_OWN_MASTER_INFO, params = payload).json()
 
-        # TODO: this section need fix
+        MasterProfile = namedtuple('MasterProfile', 'has_cover user_cover has_num tags_num cover_audit_status \
+            bg_audit_status bg_num cover_num allow_upload_bg_time cover_list total_num bg_list allow_update_area_time \
+            ')
 
-        self.__own_master_profile = response.get('data', {})
+        response = response.get('data', {})
+        self.__own_master_profile = MasterProfile(
+            # has_cover
+            response.get('hasCover'),
+            # user_cover
+            response.get('userCover'),
+            # has_num
+            response.get('hasNum'),
+            # tags_num
+            response.get('tagsNum'),
+            # cover_audit_status
+            response.get('coverAuditStatus'),
+            # bg_audit_status
+            response.get('bgAuditStatus'),
+            # bg_num
+            response.get('bgNum'),
+            # cover_num
+            response.get('coverNum'),
+            # allow_upload_bg_time
+            response.get('allowUploadBgTime'),
+            # cover_list
+            response.get('coverList'),
+            # total_num
+            response.get('totalNum'),
+            # bg_list
+            response.get('bgList'),
+            # allow_update_area_time
+            response.get('allowUpdateAreaTime')
+        )
         return self.__own_master_profile
 
-    def get_own_wear_medal(self):
-        # TODO
-        self.update_own_wear_medal()
+    async def get_own_wear_medal(self):
+        if self.__own_wear_medal is not None:
+            return self.__own_wear_medal
+        return await self.update_own_wear_medal()
 
-    def update_own_wear_medal(self):
-        # TODO
+    async def update_own_wear_medal(self):
         response = self.http_get(Config.GET_MY_WEAR_MEDAL).json()
+        response = response.get('data', {})
 
-    def get_own_medal_list(self):
-        # TODO
-        self.update_own_medal_list()
+        MedalProfile = namedtuple('MedalProfile', 'medal_id medal_name master_room_id master_id is_wear')
+        WearMedalInfo = namedtuple('WearMedalInfo', 'id self_uid wear_medal_id current_intimacy next_intimacy \
+            day_limit level guard_level medal_profile master_name rank score is_wear')
 
-    def update_own_medal_list(self):
-        # TODO
+        self.__own_wear_medal = WearMedalInfo(
+            # id
+            response.get('id', None),
+            # self_uid
+            response.get('uid', None),
+            # wear_medal_id
+            response.get('medal_id', None),
+            # current_intimacy
+            response.get('intimacy', 0),
+            # next_intimacy
+            response.get('next_intimacy', 0),
+            # day_limit
+            response.get('dayLimit', 0),
+            # level
+            response.get('level', None),
+            # guard_level
+            response.get('guard_level', None),
+            # medal_profile
+            MedalProfile(
+                # medal_id
+                response.get('medalInfo', {}).get('id'),
+                # medal_name
+                response.get('medalInfo', {}).get('medal_name'),
+                # master_room_id
+                response.get('medalInfo', {}).get('roomid'),
+                # master_id
+                response.get('medalInfo', {}).get('uid'),
+                # is_wear
+                response.get('medalInfo', {}).get('status', False)
+            ),
+            # master_name
+            response.get('anchorName', None),
+            # rank
+            response.get('rank', None),
+            # score
+            response.get('score', None),
+            # is_wear
+            response.get('isWear', False) == 1
+        )
+        return self.__own_wear_medal
+
+    async def get_own_medal_list(self):
+        if self.__own_medal_list is not None:
+            return self.__own_medal_list
+        return await self.update_own_medal_list()
+
+    async def update_own_medal_list(self):
         response = self.http_get(Config.GET_MY_MEDAL_LIST).json()
+        response = response.get('data', {})
+
+        MedalProfile = namedtuple('MedalProfile', 'medal_id medal_name is_wear master_name level')
+
+        self.__own_medal_list = [
+            MedalProfile(m['medalId'], m['medalName'], m['status'] == 1, m['anchorName'], m['level']) for m in response
+        ]
+        return self.__own_medal_list
 
     def set_own_sear_medal(self, medal_id):
         # TODO
