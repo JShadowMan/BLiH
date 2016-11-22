@@ -73,13 +73,18 @@ class Helper(object):
     def __init__(self, *, storage = True, loop = None):
         self.__user_list = {}
 
-        if loop is None:
+        self.__loop = loop
+        if self.__loop is None:
             self.__loop = asyncio.get_event_loop()
-        else:
-            self.__loop = loop
 
         if storage is True:
             self.__load_session_file()
+
+    @classmethod
+    def change_session_file_name(cls, file_name):
+        if not isinstance(file_name, str):
+            raise TypeError('file_name must be str type')
+        cls.__session_file_name = file_name
 
     def login(self, qr = True, *, username = None, password = None, storage = True, alias = None):
         if username is not None and password is not None:
@@ -91,6 +96,21 @@ class Helper(object):
 
         self.__user_list[alias if alias is not None and isinstance(alias, str) else user.name] = user
         logging.info('%s Login success' % ( user ))
+
+    async def async_foreach(self, handler):
+        if callable(handler) and asyncio.iscoroutine(handler):
+            raise TypeError('handler must be callable and coroutine')
+        for user in self.__user_list:
+            self.__loop.create_task(handler(user_instance = self.__user_list[user], helper = self, loop = self.__loop))
+
+    def async_startup(self, *task):
+        if len(task) == 1 and isinstance(task[0], list):
+            logging.warning('task is a single list')
+            task = task[0]
+        self.__loop.run_until_complete(asyncio.gather(*task))
+
+        while asyncio.Task.all_tasks(): # pending
+            self.__loop.run_until_complete(asyncio.gather(*asyncio.Task.all_tasks()))
 
     def dump(self):
         self.__dump_user_list()

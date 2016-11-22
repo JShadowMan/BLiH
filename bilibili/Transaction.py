@@ -124,7 +124,6 @@ class Transaction(object):
         try:
             soup = BeautifulSoup(response.text, 'html.parser')
             self.__own_live_room_id = int(soup.find('div', class_ = 'room-info-wrap').p.a.text)
-
             return self.__own_live_room_id
         except Exception as e:
             logging.debug('get_own_live_room_id %s', e)
@@ -139,9 +138,7 @@ class Transaction(object):
         return await self.update_own_master_info()
 
     async def update_own_master_info(self):
-        payload = {
-            'roomid': self.__own_live_room_id
-        }
+        payload = { 'roomid': self.__own_live_room_id }
         response = self.http_get(Config.GET_OWN_MASTER_INFO, params = payload).json()
 
         MasterProfile = namedtuple('MasterProfile', 'has_cover user_cover has_num tags_num cover_audit_status \
@@ -243,20 +240,56 @@ class Transaction(object):
         response = response.get('data', {})
 
         MedalProfile = namedtuple('MedalProfile', 'medal_id medal_name is_wear master_name level')
-
         self.__own_medal_list = [
-            MedalProfile(m['medalId'], m['medalName'], m['status'] == 1, m['anchorName'], m['level']) for m in response
+            MedalProfile(
+                # medal_id
+                medal['medalId'],
+                # medal_name
+                medal['medalName'],
+                # is_wear
+                medal['status'] == 1,
+                # master_name
+                medal['anchorName'],
+                # level
+                medal['level']
+            ) for medal in response
         ]
         return self.__own_medal_list
 
-    def set_own_sear_medal(self, medal_id):
-        # TODO
-        pass
+    def do_wear_own_fans_medal(self, medal_id):
+        if not isinstance(medal_id, int):
+            raise TypeError('medal_id must be int type')
+        payload = { 'medal_id': medal_id }
+        response = self.http_post(Config.WEAR_FANS_MEDAL, params = payload).json()
 
-    def cancel_own_wear_medal(self):
+        return OperatorResult(
+            # username
+            self.__user_instance.name,
+            # operator
+            'wear_own_fans_medal',
+            # status
+            response.get('code') is 0,
+            # message
+            response.get('msg'),
+            # other
+            response.get('data')
+        )
+
+    def do_cancel_own_wear_medal(self):
         response = self.http_get(Config.CANCEL_WEAR_MEDAL).json()
 
-        return response.get('code', None) is 0
+        return OperatorResult(
+            # username
+            self.__user_instance.name,
+            # operator
+            'wear_own_fans_medal',
+            # status
+            response.get('code') is 0,
+            # message
+            response.get('msg'),
+            # other
+            response.get('data')
+        )
 
     def get_own_wear_title(self):
         # TODO
