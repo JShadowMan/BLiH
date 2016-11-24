@@ -43,6 +43,8 @@ async def foreach(user_instance = None, helper = None, loop = None):
     print(trans.do_wear_own_fans_medal(random.choice(medal_list).medal_id))
     # print(trans.do_wear_own_fans_medal(119))
 
+    await trans.get_own_wear_title()
+
 # task = [
 #     # Live.LiveBiliBili(loop = loop).listen(80914, Utils.MessageHandler),
 #     # Live.LiveBiliBili(loop = loop).listen(102, Utils.MessageHandler),

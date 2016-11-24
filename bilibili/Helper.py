@@ -15,7 +15,7 @@ from bilibili.Transaction import Transaction
 
 def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None,
               manual_login = False, multi_user = False, auto_dump = True, loop = None):
-    if log not in [ logging.NOTSET, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL, logging.DEBUG ]:
+    if log not in [ logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL, logging.DEBUG ]:
         log = logging.INFO
     logging.basicConfig(level = log,
                         format='%(asctime)s %(levelname)-8s %(message)s',
@@ -46,7 +46,7 @@ def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, 
         if multi_user < 0:
             return helper
         else:
-            for i in range(multi_user):
+            for user_index in range(multi_user):
                 account.append(Account(None, None, None))
     else:
         raise TypeError('multi_user and account, parameter conflicts')

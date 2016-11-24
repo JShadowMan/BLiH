@@ -8,7 +8,7 @@ from collections import namedtuple
 from bs4 import BeautifulSoup
 from bilibili import Config, User, Exceptions, Utils, Live
 
-OperatorResult = namedtuple('OperatorResult', 'username operator status message other')
+OperatorResult = namedtuple('OperatorResult', 'username operator status message result other')
 
 class Transaction(object):
 
@@ -22,6 +22,9 @@ class Transaction(object):
 
             self.__own_wear_medal = None
             self.__own_medal_list = None
+
+            self.__own_wear_title = None
+            self.__own_title_list = None
         else:
             raise TypeError('user is not User type')
 
@@ -35,25 +38,60 @@ class Transaction(object):
         response = response.get('data', {})
 
         return OperatorResult(
-            # username operator status message other
-            self.get_user_name(), 'get_sign_info', response.get('status') is 1, response.get('text'), {
-            'current_month': response.get('curMonth'),
-            'all_days': response.get('allDays'),
-            'had_sign_days': response.get('hadSignDays')
-        })
+            # username
+            self.get_user_name(),
+            # operator
+            'get_sign_info',
+            # status
+            response.get('status') is 1,
+            # message
+            response.get('text'),
+            # result
+            None,
+            # other
+            {
+                'current_month': response.get('curMonth'),
+                'all_days': response.get('allDays'),
+                'had_sign_days': response.get('hadSignDays')
+            }
+        )
 
     def do_daily_sign(self):
         response = self.http_get(Config.LIVE_SIGN_DAILY).json()
 
         if response.get('code') is 0 and response.get('msg') == 'OK':
             return OperatorResult(
-                # username operator status message other
-                self.get_user_name(), 'do_daily_sign', True, response.get('data').get('text'), {
-                'all_days': response.get('data').get('allDays'),
-                'had_sign_days': response.get('data').get('hadSignDays')
-            })
+                # username
+                self.get_user_name(),
+                # operator
+                'do_daily_sign',
+                # status
+                True,
+                # message
+                response.get('data').get('text'),
+                # result
+                None,
+                # other
+                {
+                    'all_days': response.get('data').get('allDays'),
+                    'had_sign_days': response.get('data').get('hadSignDays')
+                }
+            )
         else:
-            return OperatorResult(self.get_user_name(), 'do_daily_sign', False, response.get('msg'), None)
+            return OperatorResult(
+                # username
+                self.get_user_name(),
+                # operator
+                'do_daily_sign',
+                # status
+                False,
+                # message
+                response.get('msg'),
+                # result
+                None,
+                # other
+                None
+            )
 
     async def listen(self, live_room_id, handle = None):
         if not isinstance(live_room_id, int):
@@ -61,10 +99,6 @@ class Transaction(object):
         if isinstance(handle, Live.PackageHandlerProtocol):
             raise TypeError('handle must be base PackageHandlerProtocol')
         asyncio.ensure_future(Live.LiveBiliBili(loop = self.__loop).listen(live_room_id, handle))
-
-    async def multi_listen(self, *live_room_list, handle):
-        # TODO
-        pass
 
     async def get_own_live_profile(self):
         if self.__own_live_profile is not None:
@@ -131,10 +165,8 @@ class Transaction(object):
     async def get_own_master_info(self):
         if self.__own_live_room_id is None:
             self.__own_live_room_id = await self.get_own_live_room_id()
-
         if self.__own_master_profile is not None:
             return self.__own_master_profile
-
         return await self.update_own_master_info()
 
     async def update_own_master_info(self):
@@ -142,8 +174,7 @@ class Transaction(object):
         response = self.http_get(Config.GET_OWN_MASTER_INFO, params = payload).json()
 
         MasterProfile = namedtuple('MasterProfile', 'has_cover user_cover has_num tags_num cover_audit_status \
-            bg_audit_status bg_num cover_num allow_upload_bg_time cover_list total_num bg_list allow_update_area_time \
-            ')
+            bg_audit_status bg_num cover_num allow_upload_bg_time cover_list total_num bg_list allow_update_area_time')
 
         response = response.get('data', {})
         self.__own_master_profile = MasterProfile(
@@ -271,6 +302,8 @@ class Transaction(object):
             response.get('code') is 0,
             # message
             response.get('msg'),
+            # result
+            None,
             # other
             response.get('data')
         )
@@ -287,17 +320,42 @@ class Transaction(object):
             response.get('code') is 0,
             # message
             response.get('msg'),
+            # result
+            None,
             # other
             response.get('data')
         )
 
-    def get_own_wear_title(self):
-        # TODO
-        self.update_own_wear_title()
+    async def get_own_wear_title(self):
+        if self.__own_wear_title is not None:
+            return self.__own_wear_title
+        return await self.update_own_wear_title()
 
-    def update_own_wear_title(self):
-        # TODO
+    async def update_own_wear_title(self):
         response = self.http_get(Config.GET_MY_WEAR_TITLE).json()
+
+        # TODO perfect this
+        TitleProfile = namedtuple('TitleProfile', 'has_title_list is_wear')
+
+        return OperatorResult(
+            # username
+            self.__user_instance.name,
+            # operator
+            'get_own_wear_title',
+            # status
+            response.get('code', False) is 0,
+            # message
+            response.get('msg', None),
+            # result
+            TitleProfile(
+                # has_title_list
+                response.get('data', {}).get('hasTitleList'),
+                # is_wear
+                response.get('data', {}).get('isWear')
+            ),
+            # other
+            None
+        )
 
     def get_own_title_list(self):
         # TODO
@@ -309,7 +367,6 @@ class Transaction(object):
 
     def cancel_own_wear_title(self):
         response = self.http_get(Config.CANCEL_WEAR_TITLE).json()
-
         return response.get('code', None) is 0
 
     def do_ban_user_on_own_room(self, uid):
