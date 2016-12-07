@@ -13,7 +13,7 @@ import aiohttp
 import logging
 import requests
 from collections import namedtuple
-from bilibili import Exceptions, Config, TerminalQr, Live, Utils
+from bilibili import Exceptions, Config, TerminalQr, Utils
 
 # Account Information
 Account = namedtuple('Account', 'username password key')

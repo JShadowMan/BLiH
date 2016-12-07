@@ -9,7 +9,6 @@ import aiohttp
 import logging
 import xml.etree.cElementTree as ET
 from urllib.parse import urljoin
-from bilibili.Package import PackageHandlerProtocol
 from bilibili import Config
 
 def anonymous_uid():
@@ -60,30 +59,6 @@ async def get_dan_mu_server_info(loop, live_room_id = None):
         return root.find('server').text, Config.LIVE_SERVER_PORT
     except Exception as e:
         logging.debug('Utils.get_dan_mu_server_info error', e)
-
-class MessageHandler(PackageHandlerProtocol):
-
-    def __init__(self, *, file = sys.stdout):
-        super(MessageHandler, self).__init__()
-
-    def on_error_occurs(self, package):
-        print(package)
-
-    def on_welcome_message(self, contents):
-        print(contents)
-
-    def on_heartbeat_response(self, contents):
-        print(contents)
-
-    def on_allow_join(self):
-        print('Join room complete')
-        return True
-
-    def on_dan_mu_message(self, contents):
-        print(contents)
-
-    def on_gift_message(self, contents):
-        print(contents)
 
 def check_args(args):
     pass

@@ -103,11 +103,11 @@ class Transaction(object):
     async def get_own_live_profile(self):
         if self.__own_live_profile is not None:
             return self.__own_live_profile
-
         return await self.update_own_live_profile()
 
     async def update_own_live_profile(self):
         response = self.http_get(Config.GET_USER_LIVE_INFO).json()
+        message = response.get('msg', None)
         response = response.get('data', {})
 
         LiveProfile = namedtuple('LiveProfile', 'name silver gold level exp achieve identity room_id \
@@ -335,48 +335,51 @@ class Transaction(object):
         response = self.http_get(Config.GET_MY_WEAR_TITLE).json()
 
         # TODO perfect this
-        TitleProfile = namedtuple('TitleProfile', 'has_title_list is_wear')
+        TitleProfile = namedtuple('TitleProfile', 'has_title_list is_wear remark')
 
-        return OperatorResult(
-            # username
-            self.__user_instance.name,
-            # operator
-            'get_own_wear_title',
-            # status
-            response.get('code', False) is 0,
-            # message
-            response.get('msg', None),
-            # result
-            TitleProfile(
-                # has_title_list
-                response.get('data', {}).get('hasTitleList'),
-                # is_wear
-                response.get('data', {}).get('isWear')
-            ),
-            # other
-            None
+        self.__own_wear_title = TitleProfile(
+            # has_title_list
+            response.get('data', {}).get('hasTitleList'),
+            # is_wear
+            response.get('data', {}).get('isWear'),
+            # !remark!
+            '!imperfect!'
         )
+        return self.__own_wear_title
 
-    def get_own_title_list(self):
-        # TODO
-        self.update_own_title_list()
+    async def get_own_title_list(self):
+        if self.__own_title_list is not None:
+            return self.__own_title_list
+        return await self.update_own_title_list()
 
-    def update_own_title_list(self):
-        # TODO
+    async def update_own_title_list(self):
         response = self.http_get(Config.GET_MY_TITLE_LIST).json()
+
+        # TODO perfect this
+        TitleProfile = namedtuple('TitleProfile', 'remark')
+
+        self.__own_title_list = [
+            TitleProfile(
+                # remark
+                '!imperfect!'
+            ) for title in response.get('data', {})
+        ]
+        return self.__own_title_list
 
     def cancel_own_wear_title(self):
         response = self.http_get(Config.CANCEL_WEAR_TITLE).json()
         return response.get('code', None) is 0
 
-    def do_ban_user_on_own_room(self, uid):
+    async def do_ban_user_on_own_room(self, uid):
+        if self.__own_live_room_id is None:
+            self.__own_live_room_id = await self.get_own_live_room_id()
+        return await self.do_ban_user_on_live_room(uid, self.__own_live_room_id)
+
+    async  def do_ban_user_on_live_room(self, uid, live_room_id):
+        payload = { 'roomid': live_room_id, 'uid': uid, 'type': 1 }
+        response = self.http_post(Config.ADMIN_SHIELD_USER, data = payload).json()
         # TODO
-        payload = {
-            'roomid': 0,
-            'uid': 0,
-            'type': 1
-        }
-        response = self.http_get(Config.ADMIN_SHIELD_USER, params = payload)
+
 
     def do_dan_mu_report(self):
         # TODO
@@ -432,7 +435,9 @@ class Transaction(object):
 
     async def get_live_room_profile(self, live_room_id = None):
         if live_room_id is None:
-            live_room_id = 0
+            if self.__own_live_room_id is None:
+                self.__own_live_room_id = await self.get_own_live_room_id()
+            live_room_id = self.__own_live_room_id
         elif not isinstance(live_room_id, int):
             if isinstance(live_room_id, str) and live_room_id.isalnum():
                 live_room_id = int(live_room_id)

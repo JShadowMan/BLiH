@@ -12,6 +12,8 @@ def parse_args():
 
     parse.add_argument('-u', '--user', help = 'username')
     parse.add_argument('-p', '--password', help = 'password')
+    parse.add_argument('-q', '--qr-login', help = 'using qr-code login', action = 'store_true')
+    parse.add_argument('-c', '--user-count', help = 'max user count, default by 1', type = int)
 
     return parse.parse_args()
 

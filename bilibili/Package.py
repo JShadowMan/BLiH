@@ -132,30 +132,58 @@ class LivePackageParser(object):
             return contents
 
     def ___parse_dan_mu_message(self, contents):
-        Message = namedtuple('Message', 'name message other')
+        Message = namedtuple('Message', 'uid name message other')
 
-        return Message(contents.get('info', {})[2][1], contents.get('info', {})[1], dict({
-            'roomId': self.__room_id
-        }, **self.__other_data))
+        return Message(
+            # uid
+            contents.get('info', {})[2][0],
+            # name
+            contents.get('info', {})[2][1],
+            # message
+            contents.get('info', {})[1],
+            # other
+            dict({
+                'live_room_id': self.__room_id
+            }, **self.__other_data)
+        )
 
     def ___parse_welcome_message(self, contents):
         Welcome = namedtuple('Welcome', 'uid name vip admin other')
 
-        return Welcome(contents.get('data', {}).get('uid', None), contents.get('data', {}).get('uname', None),
-                       True if contents.get('data', {}).get('vip', None) == 1 else False,
-                       True if contents.get('data', {}).get('isadmin', None) == 1 else False, dict({
-            'roomId': contents.get('roomid', None)
-        }, **self.__other_data))
+        return Welcome(
+            # uid
+            contents.get('data', {}).get('uid', None),
+            # name
+            contents.get('data', {}).get('uname', None),
+            # vip
+            True if contents.get('data', {}).get('vip', None) == 1 else False,
+            # admin
+            True if contents.get('data', {}).get('isadmin', None) == 1 else False,
+            # other
+            dict({
+                'live_room_id': contents.get('roomid', None)
+            }, **self.__other_data)
+        )
 
     def ___parse_send_gift_message(self, contents):
         Gift = namedtuple('Gift', 'uid name gift count time other')
 
-        return Gift(contents.get('data', {}).get('uid', None), contents.get('data', {}).get('uname', None),
-                    contents.get('data', {}).get('giftName', None), contents.get('data', {}).get('num', None),
-                    contents.get('data', {}).get('timestamp', None), dict({
-            'roomId': contents.get('roomid', None)
-            # top list
-        }, **self.__other_data))
+        return Gift(
+            # uid
+            contents.get('data', {}).get('uid', None),
+            # name
+            contents.get('data', {}).get('uname', None),
+            # gift
+            contents.get('data', {}).get('giftName', None),
+            # count
+            contents.get('data', {}).get('num', None),
+            # time
+            contents.get('data', {}).get('timestamp', None),
+            # other
+            dict({
+                'live_room_id': contents.get('roomid', None)
+            }, **self.__other_data)
+        )
 
     @property
     def package(self):
@@ -242,6 +270,9 @@ class LivePackageGenerator(object):
                         elif messageType == 'Welcome':
                             self.__package_handler.on_welcome_message(package.body)
 
+    def stop_listen(self):
+        self.__listening = False
+
     async def __heartbeat(self):
         package = self.__package_generator(type = self.__PKG_TYPE_HEARTBEAT)
         while self.__listening is True:
@@ -303,14 +334,6 @@ class LivePackageGenerator(object):
             return struct.pack('!IHHII{}s'.format(len(body)), package_length, header_length, version, type, unknown, body)
         except Exception as e:
             pass
-
-    @classmethod
-    def getDanMuServerAddress(cls):
-        return cls.__DM_SERVER_ADDRESS
-
-    @classmethod
-    def getDanMuServerPort(cls):
-        return cls.__DM_SEVER_PORT
 
 class PackageHandlerProtocol(object, metaclass = abc.ABCMeta):
 
