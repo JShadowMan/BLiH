@@ -222,7 +222,7 @@ class LivePackageGenerator(object):
         self.__live_room_id = None
         self.__package_handler = None
 
-    async def join(self, live_room_id, uid, package_handler):
+    async def join(self, live_room_id, uid, package_handler, *args):
         if isinstance(live_room_id, int) and isinstance(uid, int):
             self.__uid = uid
             self.__live_room_id = live_room_id
@@ -237,7 +237,7 @@ class LivePackageGenerator(object):
             print('LivePackageGenerator::__init__() error', e)
 
         if callable(package_handler):
-            handler = package_handler()
+            handler = package_handler(*args)
 
             if isinstance(handler, PackageHandlerProtocol):
                 self.__package_handler = handler
