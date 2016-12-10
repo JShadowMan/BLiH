@@ -53,8 +53,10 @@ class GuiApplication(tk.Frame):
             self.__async_loop = async_loop
 
         self.style = ttk.Style()
-
         self.__init_window()
+
+        self.helper = Helper.bliHelper(loop = self.__async_loop, manual_login = True)
+        self.__init_helper()
 
     def __init_window(self):
         self.master.title(_standard_title)
@@ -74,20 +76,28 @@ class GuiApplication(tk.Frame):
         self.__init_window_frame()
 
     def __init_window_menu_bar(self):
-        self.__menu_bar = tk.Menu(self.master)
-        self.master.config(menu = self.__menu_bar)
+        self.menu_bar = tk.Menu(self.master)
+        self.master.config(menu = self.menu_bar)
 
-        file_menu = tk.Menu(self.__menu_bar, tearoff = False)
+        file_menu = tk.Menu(self.menu_bar, tearoff = False)
         file_menu.add_command(label = 'Load...', underline = 0)
         file_menu.add_command(label = 'Save...', underline = 0)
 
-        view_menu = tk.Menu(self.__menu_bar, tearoff = False)
+        view_menu = tk.Menu(self.menu_bar, tearoff = False)
         view_sub_menu_side_bar = tk.Menu(view_menu, tearoff = False)
         view_sub_menu_side_bar.add_command(label = 'Hide Side Bar')
         view_menu.add_cascade(label = 'Side Bar', menu = view_sub_menu_side_bar)
         view_menu.add_command(label = 'Hide Status Bar')
 
-        help_menu = tk.Menu(self.__menu_bar, tearoff = False)
+        account_menu = tk.Menu(self.menu_bar, tearoff = False)
+        account_menu.add_command(label = 'Login With Qr', command = self.__login_with_qr)
+        account_menu.add_command(label = 'Login With UN/PW')
+        account_menu.add_separator()
+        account_menu.add_command(label = 'Account Info')
+        account_menu.add_separator()
+        account_menu.add_command(label='Own Live Info')
+
+        help_menu = tk.Menu(self.menu_bar, tearoff = False)
         help_menu.add_command(label = 'Documents')
         help_menu.add_command(label = 'Weibo')
         help_menu.add_separator()
@@ -98,9 +108,10 @@ class GuiApplication(tk.Frame):
         help_menu.add_command(label='Changelog')
         help_menu.add_command(label='About')
 
-        self.__menu_bar.add_cascade(label = 'File', menu = file_menu, underline = 0)
-        self.__menu_bar.add_cascade(label = 'View', menu = view_menu, underline = 0)
-        self.__menu_bar.add_cascade(label = 'Help', menu = help_menu, underline = 0)
+        self.menu_bar.add_cascade(label ='File', menu = file_menu, underline = 0)
+        self.menu_bar.add_cascade(label ='View', menu = view_menu, underline = 0)
+        self.menu_bar.add_cascade(label = 'Account', menu = account_menu, underline = 0)
+        self.menu_bar.add_cascade(label ='Help', menu = help_menu, underline = 0)
 
     def __init_window_tool_bar(self):
         tool_bar = tk.Frame(self, relief = tk.RAISED)
@@ -138,6 +149,7 @@ class GuiApplication(tk.Frame):
 
     def __init_window_frame(self):
         self.__init_window_top_frame()
+        self.__init_window_bot_frame()
         self.__init_window_mid_frame()
 
     def __init_window_top_frame(self):
@@ -166,6 +178,25 @@ class GuiApplication(tk.Frame):
         self.dan_mu_message = text_dan_mu_message
 
         mid_frame.pack(fill = tk.BOTH, expand = True)
+
+    def __init_window_bot_frame(self):
+        bot_frame = tk.Frame(self)
+
+        self.username = tk.StringVar(self, 'anonymous')
+        label_username = tk.Label(bot_frame, textvariable = self.username)
+        label_username.pack(side = tk.LEFT, padx = 5, pady = 5)
+
+        bot_frame.pack(side = tk.BOTTOM, fill = tk.X)
+
+    def __init_helper(self):
+        if self.helper.accountSize() != 0:
+            if self.helper.accountSize() == 1:
+                self.username.set(self.helper.accounts()[0])
+            else:
+                self.username.set('Multi User {}'.format(self.helper.accounts()))
+
+    def __login_with_qr(self):
+        self.helper.login(print_handle = self.username.set)
 
     def __startup(self):
         if not self.live_room_id.get():
