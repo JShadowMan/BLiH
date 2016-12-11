@@ -8,7 +8,7 @@
 import re
 import sys
 import json
-import time
+import asyncio
 import aiohttp
 import logging
 import requests
@@ -28,137 +28,156 @@ class User(object):
     _qr_adapter = TerminalQr.create
     _output_file = sys.stdout
 
-    def __init__(self, qr = True, *, username = None, password = None, alias = None):
-        self.__session_object = self.__init_session_object()
+    def __init__(self, qr = True, *, loop = None, username = None, password = None, alias = None, print_handle = None,
+                 cookies = None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self.__async_loop = loop
+        self.__session_object = aiohttp.ClientSession(loop = self.__async_loop)
 
+        if cookies is not None:
+            self.__session_object.cookie_jar._cookies = cookies
+
+        new_event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_event_loop)
+        if cookies is not None:
+            new_event_loop.run_until_complete(self.update_profile())
+        else:
+            new_event_loop.run_until_complete(self.__init_account(qr, username, password, print_handle))
+        new_event_loop.stop()
+        asyncio.set_event_loop(self.__async_loop)
+
+    async def __init_account(self, qr, username, password, print_handle):
         if username is not None and password is not None:
-            self.__account = self.__login_with_pw(username, password)
+            self.__account = await self.__login_with_pw(username, password)
         elif qr is True:
-            self.__account = self.__login_with_qr()
-
-        self.__profile = self.__init_profile()
+            self.__account = await self.__login_with_qr(print_handle)
+        self.__profile = await self.__init_profile()
 
     @classmethod
     def factory(cls, username, password, OAuthKey, cookieJar):
         pass
 
-    # HTTP Method: GET
-    def get(self, *args, **kwargs):
+    # Async HTTP Method: GET
+    async def async_get(self, *args, **kwargs):
         try:
-            return self.__session_object.get(*args, **kwargs)
+            async with self.__session_object.get(*args, **kwargs) as response:
+                if response.status is 200:
+                    return await response.text()
+                else:
+                    raise Exception('request error', response.status)
         except requests.exceptions.ConnectionError as e:
             raise Exceptions.NetworkException('request timeout')
+        except RuntimeError as e:
+            logging.warning(str(e))
+            async with aiohttp.ClientSession(loop = asyncio.get_event_loop()) as client:
+                client.cookie_jar._cookies = self.__session_object.cookie_jar._cookies
+                async with client.get(*args, **kwargs) as response:
+                    if response.status is 200:
+                        return await response.text()
+                    else:
+                        raise Exception('request error', response.status)
 
-    # HTTP Method: POST
-    def post(self, *args, **kwargs):
+    # Async HTTP Method: POST
+    async def async_post(self, *args, **kwargs):
         try:
-            return self.__session_object.post(*args, **kwargs)
+            async with self.__session_object.post(*args, **kwargs) as response:
+                if response.status is 200:
+                    return await response.text()
+                else:
+                    raise Exception('request error', response.status)
         except requests.exceptions.ConnectionError as e:
-            logging.debug('User::post() %s' % ( e ))
-            raise Exceptions.NetworkException
+            raise Exceptions.NetworkException('request timeout')
+        except RuntimeError as e:
+            async with aiohttp.ClientSession(loop = asyncio.get_event_loop()) as client:
+                client.cookie_jar._cookies = self.__session_object.cookie_jar._cookies
+                async with client.post(*args, **kwargs) as response:
+                    if response.status is 200:
+                        return await response.text()
+                    else:
+                        raise Exception('request error', response.status)
 
-    def update_profile(self):
-        self.__profile = self.__init_profile()
+    async def update_profile(self):
+        self.__profile = await self.__init_profile()
 
-    def __init_session_object(self):
-        session = requests.Session()
-
-        for times in range(Config.RE_LOGIN_COUNT):
-            try:
-                logging.info('Initializes a new session')
-                session.get(Config.INIT_COOKIES_START, stream = True).close()
-                break
-            except requests.exceptions.ConnectionError:
-                pass
-
-        return session
-
-    def __login_with_pw(self, username, password):
+    async def __login_with_pw(self, username, password):
         key = self.__get_oauth_key()
 
         # TODO
 
         return Account(username, password, key)
 
-    def __login_with_qr(self):
-        key = self.__get_oauth_key()
+    async def __login_with_qr(self, print_handle):
+        key = await self.__get_oauth_key()
 
-        logging.info('Authentication of identity, using QrLogin')
-        with User._qr_adapter(Config.login_with_qr_url(key)) as qc:
-            print(qc, file = self._output_file)
+        logging.info('Authentication of identity, using qr code')
+        with User._qr_adapter(Utils.login_with_qr_url(key)) as qc:
+            if asyncio.iscoroutine(print_handle):
+                await print_handle(str(qc))
+            else:
+                print_handle(str(qc))
 
-        self.__check_login_status(key) # await
-
+        await self.__check_login_status(key, print_handle)
         return Account(None, None, key)
 
-    def __get_oauth_key(self):
-        logging.info('From the server gets a OAuth key')
-        response = self.get(Config.GET_OAUTH_KEY).json()
+    async def __get_oauth_key(self):
+        logging.info('From the server get a oauth key')
+        response = json.loads(await self.async_get(Config.GET_OAUTH_KEY))
+
         try:
             logging.info('Gets the OAuth key completed')
-            return response.get('data').get('oauthKey')
+            return response.get('data', {}).get('oauthKey')
         except KeyError:
-            raise Exceptions.FatalException('Error occurred getting OAuth key, official API may be changed')
+            raise Exceptions.FatalException('Error occurred getting oauth key, official API may be changed')
         except Exceptions.NetworkException:
             raise
 
-    def __check_login_status(self, oauthKey):
+    async def __check_login_status(self, oauth_key, print_handle):
         for times in range(Config.RE_LOGIN_COUNT):
-            info = None
             for sec in range(0, Config.QR_EXPIRED_TIME, Config.DETECT_LOGIN_STATUS_INTERVAL):
-                info = self.post(Config.LOGIN_INFO_URL, data = { 'oauthKey': oauthKey }).json()
+                info = json.loads(await self.async_post(Config.LOGIN_INFO_URL, data = {'oauthKey': oauth_key}))
 
-                if info.get('status', None) is True:
+                if info.get('status') is True:
                     break
-                else:
-                    time.sleep(Config.DETECT_LOGIN_STATUS_INTERVAL)
+                asyncio.sleep(Config.DETECT_LOGIN_STATUS_INTERVAL)
             else:
-                logging.info('QrCode expired, refresh QrCode ...')
-
-                with self._qr_adapter(Config.login_with_qr_url(oauthKey)) as qc:
-                    print(qc, file = self._output_file)
-
-            if info.get('status', None) is True:
-                if 'data' in info and 'url' in info['data']:
-                    try:
-                        # Gets the child domain cookies ?
-                        # self.__session_object.get(info['data']['url']).close()
-                        pass
-                    except requests.exceptions.ConnectionError:
-                        logging.debug('User::__checkLoginInfo')
-                        raise
-                break
+                logging.info('qr code expired, refresh qr code ...')
+                with self._qr_adapter(Utils.login_with_qr_url(oauth_key)) as qc:
+                    if asyncio.iscoroutine(print_handle):
+                        await print_handle(str(qc))
+                    print_handle(str(qc))
+            break
         else:
-            self.__terminate(logging.error, 'The number of retries exceeds the limit.')
+            logging.error('The number of retries exceeds the limit')
 
-
-    def __init_profile(self):
-        navJs = self.get(Config.GET_USER_INFO).text
+    async def __init_profile(self):
+        navJs = await self.async_get(Config.GET_USER_INFO)
         userInfo = json.loads(re.search(r'(loadLoginInfo\()([^\)].*)(\))', navJs).groups()[1])
 
         # TODO. Perfect this
-        name  = userInfo.get('uname', None)
-        level = userInfo.get('level_info', {}).get('current_level', None)
-        money = userInfo.get('money', None)
+        name  = userInfo.get('uname')
+        level = userInfo.get('level_info', {}).get('current_level')
+        money = userInfo.get('money')
         exp   = {
-            'min': userInfo.get('level_info', {}).get('current_min', None),
-            'current': userInfo.get('level_info', {}).get('current_exp', None),
-            'next': userInfo.get('level_info', {}).get('next_exp', None)
+            'min': userInfo.get('level_info', {}).get('current_min'),
+            'current': userInfo.get('level_info', {}).get('current_exp'),
+            'next': userInfo.get('level_info', {}).get('next_exp')
         }
         other = {
-            'vip': True if userInfo.get('vipStatus', 0) == 1 else False,
-            'face': userInfo.get('face', None)
+            'vip': True if userInfo.get('vipStatus', False) == 1 else False,
+            'face': userInfo.get('face')
         }
         return Profile(name, level, money, exp, other)
 
-    def __terminate(self, handler, message):
-        handler(message)
-
     def __str__(self):
-        return '<User name = {}, level = {}, money = {}>'.format(self.name, self.level, self.money)
+        return '<User name = {}, level = {}, money = {}, exp={}/{}>'.format(
+            self.name, self.level, self.money, self.exp['current'], self.exp['next']
+        )
 
     def __repr__(self):
-        return '<User name = {}, level = {}, money = {}>'.format(self.name, self.level, self.money)
+        return '<User name = {}, level = {}, money = {}, exp={}/{}>'.format(
+            self.name, self.level, self.money, self.exp['current'], self.exp['next']
+        )
 
     @property
     def name(self):
@@ -171,6 +190,10 @@ class User(object):
     @property
     def money(self):
         return self.__profile.money
+    
+    @property
+    def exp(self):
+        return self.__profile.exp
 
     @property
     def username(self):
@@ -191,4 +214,8 @@ class User(object):
     @property
     def face(self):
         return self.__profile.other['face']
+
+    @property
+    def cookie_jar(self):
+        return self.__session_object.cookie_jar
 

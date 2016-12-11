@@ -19,10 +19,10 @@ LIVE_SERVER_PORT = 788
 INIT_COOKIES_START = 'https://passport.bilibili.com/login'
 
 # From Server Get OAuth Key
-GET_OAUTH_KEY      = 'https://passport.bilibili.com/qrcode/getLoginUrl'
+GET_OAUTH_KEY = 'https://passport.bilibili.com/qrcode/getLoginUrl'
 
 # QrCode Contents
-QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey=%s'
+QR_LOGIN_URL   = 'https://account.bilibili.com/qrcode/login?oauthKey={}'
 
 # Check Login Info
 LOGIN_INFO_URL = 'https://passport.bilibili.com/qrcode/getLoginInfo'
@@ -334,6 +334,6 @@ def login_with_qr_url(oauth_key = None):
     else:
         if len(oauth_key) != 32:
             raise Exceptions.ConfigException('oauth_key format error, length is not 32')
-        return QR_LOGIN_URL % oauth_key
+        return QR_LOGIN_URL.format(oauth_key)
 
 

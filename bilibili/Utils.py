@@ -9,7 +9,7 @@ import aiohttp
 import logging
 import xml.etree.cElementTree as ET
 from urllib.parse import urljoin
-from bilibili import Config
+from bilibili import Config, Exceptions
 
 def anonymous_uid():
     return int(100000000000000 + (200000000000000 * random.random()))
@@ -59,6 +59,15 @@ async def get_dan_mu_server_info(loop, live_room_id = None):
         return root.find('server').text, Config.LIVE_SERVER_PORT
     except Exception as e:
         logging.debug('Utils.get_dan_mu_server_info error', e)
+
+
+def login_with_qr_url(oauth_key = None):
+    if oauth_key is None:
+        raise Exceptions.ConfigException('oauth_key parameter must be specified')
+    else:
+        if len(oauth_key) != 32:
+            raise Exceptions.ConfigException('oauth_key format error, length is not 32')
+        return Config.QR_LOGIN_URL.format(oauth_key)
 
 def check_args(args):
     pass

@@ -16,14 +16,7 @@ def create(content = None, *, border = 1):
     qr.add_data(content)
     qr.make(fit = True)
 
-    if platform.system() == 'Windows':
-        return WindowsMixIn(qr.make_image(), content)
-    elif platform.system() == 'Linux':
-        return LinuxMixIn(qr.make_image(), content)
-    elif platform.system() == 'Darwin':
-        return UnixMixIn(qr.make_image(), content)
-    else:
-        return LinuxMixIn(qr.make_image(), content)
+    return TerminalQr(qr.make_image(), content)
 
 class TerminalQr(object):
     BLACK = '\u2588\u2588'
@@ -80,16 +73,3 @@ class TerminalQr(object):
     def __split_pixels(self):
         lineSize = self.__image.width + self.__padding * 2
         self.__pixels = [ self.__data[i:i + lineSize] for i in range(0, len(self.__data), lineSize) ]
-
-
-class WindowsMixIn(TerminalQr):
-    pass
-
-class LinuxMixIn(TerminalQr):
-    BLACK = 'MM'
-    BLANK = '  '
-
-class UnixMixIn(TerminalQr):
-    BLACK = 'MM'
-    BLANK = '  '
-

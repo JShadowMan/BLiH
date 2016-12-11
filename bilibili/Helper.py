@@ -13,7 +13,7 @@ from bilibili import Exceptions, Storage, Config, TerminalQr
 from bilibili.User import User, Account
 from bilibili.Transaction import Transaction
 
-def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None,
+def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, log_file = None, log_redirection = None,
               manual_login = False, multi_user = False, auto_dump = True, loop = None):
     if log not in [ logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL, logging.DEBUG ]:
         log = logging.INFO
@@ -25,7 +25,7 @@ def bliHelper(qr = True, *, storage = True, account = None, log = logging.INFO, 
         loop = asyncio.get_event_loop()
 
     helper = Helper(storage = storage, loop = loop)
-    if helper.accountSize() != 0 and manual_login is False:
+    if helper.accountSize() != 0 or manual_login is True:
         if multi_user is True or multi_user is False:
             return helper
 
@@ -73,12 +73,12 @@ class Helper(object):
     def __init__(self, *, storage = True, loop = None):
         self.__user_list = {}
 
-        self.__loop = loop
-        if self.__loop is None:
-            self.__loop = asyncio.get_event_loop()
-
-        if storage is True:
-            self.__load_session_file()
+        self.__async_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.__async_loop)
+        self.__async_loop.run_until_complete(self.__load_session_file())
+        if loop is not None:
+            self.__async_loop = loop
+            asyncio.set_event_loop(self.__async_loop)
 
     @classmethod
     def change_session_file_name(cls, file_name):
@@ -86,11 +86,17 @@ class Helper(object):
             raise TypeError('file_name must be str type')
         cls.__session_file_name = file_name
 
-    def login(self, qr = True, *, username = None, password = None, storage = True, alias = None):
+    @classmethod
+    def get_session_file_name(cls):
+        return cls.__session_file_name
+
+    def login(self, qr = True, *, username = None, password = None, storage = True, alias = None, print_handle = None):
         if username is not None and password is not None:
-            user = User(username = username, password = password)
+            user = User(username = username, password = password, loop = self.__async_loop)
         elif qr is True:
-            user = User(qr = True)
+            if print_handle is None:
+                print_handle = print
+            user = User(qr = True, print_handle = print_handle, loop = self.__async_loop)
         else:
             raise Exceptions.FatalException('login parameters are incorrect, type not specified')
 
@@ -101,16 +107,18 @@ class Helper(object):
         if callable(handler) and asyncio.iscoroutine(handler):
             raise TypeError('handler must be callable and coroutine')
         for user in self.__user_list:
-            self.__loop.create_task(handler(user_instance = self.__user_list[user], helper = self, loop = self.__loop))
+            self.__async_loop.create_task(
+                handler(user_instance = self.__user_list[user], helper = self, loop = self.__async_loop)
+            )
 
     def async_startup(self, *task):
         if len(task) == 1 and isinstance(task[0], list):
             logging.warning('task is a single list')
             task = task[0]
-        self.__loop.run_until_complete(asyncio.gather(*task))
+        self.__async_loop.run_until_complete(asyncio.gather(*task))
 
         while asyncio.Task.all_tasks(): # pending
-            self.__loop.run_until_complete(asyncio.gather(*asyncio.Task.all_tasks()))
+            self.__async_loop.run_until_complete(asyncio.gather(*asyncio.Task.all_tasks()))
 
     def dump(self):
         self.__dump_user_list()
@@ -126,24 +134,33 @@ class Helper(object):
 
     def select(self, name):
         if self.is_exists(name):
-            return Transaction(self.__user_list[name], loop = self.__loop)
+            return Transaction(self.__user_list[name], loop = self.__async_loop)
 
     def get_user(self, name):
         if self.is_exists(name):
             return self.__user_list[name]
 
     def __dump_user_list(self):
-        Storage.dump(self.__session_file_name, self.__user_list)
+        pickle_data = {}
+        for user in self.__user_list:
+            pickle_data[self.__user_list[user].name] = self.__user_list[user].cookie_jar._cookies
+        Storage.dump(self.__session_file_name, pickle_data)
 
-    def __load_session_file(self):
+    async def __load_session_file(self):
         if os.path.isfile(self.__session_file_name) is False:
             return False
 
-        logging.info('Dump file detected, using saved session')
-        with Storage.load(self.__session_file_name) as user_list:
-            logging.info('Dump file is loaded, the number of user is {}'.format(len(user_list)))
+        if os.path.getsize(self.__session_file_name) == 0:
+            logging.warning('the session file is empty')
+            os.remove(self.__session_file_name)
+            return
 
-            self.__user_list = user_list
-            for user in self.__user_list:
+        logging.info('Dump file detected, using saved session')
+        with Storage.load(self.__session_file_name) as cookies_list:
+            logging.info('Dump file is loaded, the number of user is {}'.format(len(cookies_list)))
+
+            self.__user_list = {}
+            for user in cookies_list:
                 logging.info('Updating user profile of {}'.format(user))
-                self.__user_list[user].update_profile()
+                self.__user_list[user] = User(loop = self.__async_loop, cookies = cookies_list[user])
+                logging.info('{} profile updated'.format(user))

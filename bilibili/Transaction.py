@@ -2,6 +2,7 @@
 #
 # Copyright (C) 2016 ShadowMan
 #
+import json
 import asyncio
 import logging
 from collections import namedtuple
@@ -29,12 +30,12 @@ class Transaction(object):
             raise TypeError('user is not User type')
 
         if loop is None:
-            self.__loop = asyncio.get_event_loop()
+            self.__async_loop = asyncio.get_event_loop()
         else:
-            self.__loop = loop
+            self.__async_loop = loop
 
-    def get_sign_info(self):
-        response = self.http_get(Config.GET_SIGN_INFO).json()
+    async def get_sign_info(self):
+        response = json.loads(await self.async_get(Config.GET_SIGN_INFO))
         response = response.get('data', {})
 
         return OperatorResult(
@@ -56,8 +57,8 @@ class Transaction(object):
             }
         )
 
-    def do_daily_sign(self):
-        response = self.http_get(Config.LIVE_SIGN_DAILY).json()
+    async def do_daily_sign(self):
+        response = json.loads(await self.async_get(Config.LIVE_SIGN_DAILY))
 
         if response.get('code') is 0 and response.get('msg') == 'OK':
             return OperatorResult(
@@ -98,7 +99,8 @@ class Transaction(object):
             raise TypeError('live_room_id must be int type')
         if isinstance(handle, Live.PackageHandlerProtocol):
             raise TypeError('handle must be base PackageHandlerProtocol')
-        asyncio.ensure_future(Live.LiveBiliBili(loop = self.__loop).listen(live_room_id, handle))
+        # asyncio.ensure_future(Live.LiveBiliBili(loop = self.__async_loop).listen(live_room_id, handle))
+        self.__async_loop.create_task(Live.LiveBiliBili(loop=self.__async_loop).listen(live_room_id, handle))
 
     async def get_own_live_profile(self):
         if self.__own_live_profile is not None:
@@ -106,7 +108,7 @@ class Transaction(object):
         return await self.update_own_live_profile()
 
     async def update_own_live_profile(self):
-        response = self.http_get(Config.GET_USER_LIVE_INFO).json()
+        response = json.loads(await self.async_get(Config.GET_USER_LIVE_INFO))
         message = response.get('msg', None)
         response = response.get('data', {})
 
@@ -138,7 +140,7 @@ class Transaction(object):
             # achieve
             response.get('achieve'),
             # identity
-            { 'vip': response.get('vip') != 0, 'svip': response.get('svip') != 0 },
+            { 'vip': response.get('vip') != 0, 'svip': response.get('svip') != 0},
             # room_id
             self.__own_live_room_id,
             # master_profile
@@ -154,9 +156,9 @@ class Transaction(object):
         if self.__own_live_room_id is not None:
             return self.__own_live_room_id
 
-        response = self.http_get(Config.GET_OWN_LIVE_ROOM_INFO)
+        response = await self.async_get(Config.GET_OWN_LIVE_ROOM_INFO)
         try:
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response, 'html.parser')
             self.__own_live_room_id = int(soup.find('div', class_ = 'room-info-wrap').p.a.text)
             return self.__own_live_room_id
         except Exception as e:
@@ -171,7 +173,7 @@ class Transaction(object):
 
     async def update_own_master_info(self):
         payload = { 'roomid': self.__own_live_room_id }
-        response = self.http_get(Config.GET_OWN_MASTER_INFO, params = payload).json()
+        response = json.loads(await self.async_get(Config.GET_OWN_MASTER_INFO, params = payload))
 
         MasterProfile = namedtuple('MasterProfile', 'has_cover user_cover has_num tags_num cover_audit_status \
             bg_audit_status bg_num cover_num allow_upload_bg_time cover_list total_num bg_list allow_update_area_time')
@@ -213,7 +215,7 @@ class Transaction(object):
         return await self.update_own_wear_medal()
 
     async def update_own_wear_medal(self):
-        response = self.http_get(Config.GET_MY_WEAR_MEDAL).json()
+        response = json.loads(await self.async_get(Config.GET_MY_WEAR_MEDAL))
         response = response.get('data', {})
 
         MedalProfile = namedtuple('MedalProfile', 'medal_id medal_name master_room_id master_id is_wear')
@@ -267,35 +269,35 @@ class Transaction(object):
         return await self.update_own_medal_list()
 
     async def update_own_medal_list(self):
-        response = self.http_get(Config.GET_MY_MEDAL_LIST).json()
+        response = json.loads(await self.async_get(Config.GET_MY_MEDAL_LIST))
         response = response.get('data', {})
 
         MedalProfile = namedtuple('MedalProfile', 'medal_id medal_name is_wear master_name level')
         self.__own_medal_list = [
             MedalProfile(
                 # medal_id
-                medal['medalId'],
+                medal.get('medalId'),
                 # medal_name
-                medal['medalName'],
+                medal.get('medalName'),
                 # is_wear
-                medal['status'] == 1,
+                medal.get('status') == 1,
                 # master_name
-                medal['anchorName'],
+                medal.get('anchorName'),
                 # level
-                medal['level']
+                medal.get('level')
             ) for medal in response
         ]
         return self.__own_medal_list
 
-    def do_wear_own_fans_medal(self, medal_id):
+    async def do_wear_own_fans_medal(self, medal_id):
         if not isinstance(medal_id, int):
             raise TypeError('medal_id must be int type')
         payload = { 'medal_id': medal_id }
-        response = self.http_post(Config.WEAR_FANS_MEDAL, params = payload).json()
+        response = json.loads(await self.async_post(Config.WEAR_FANS_MEDAL, params = payload))
 
         return OperatorResult(
             # username
-            self.__user_instance.name,
+            self.get_user_name(),
             # operator
             'wear_own_fans_medal',
             # status
@@ -308,12 +310,12 @@ class Transaction(object):
             response.get('data')
         )
 
-    def do_cancel_own_wear_medal(self):
-        response = self.http_get(Config.CANCEL_WEAR_MEDAL).json()
+    async def do_cancel_own_wear_medal(self):
+        response = json.loads(await self.async_get(Config.CANCEL_WEAR_MEDAL))
 
         return OperatorResult(
             # username
-            self.__user_instance.name,
+            self.get_user_name(),
             # operator
             'wear_own_fans_medal',
             # status
@@ -332,7 +334,7 @@ class Transaction(object):
         return await self.update_own_wear_title()
 
     async def update_own_wear_title(self):
-        response = self.http_get(Config.GET_MY_WEAR_TITLE).json()
+        response = json.loads(await self.async_get(Config.GET_MY_WEAR_TITLE))
 
         # TODO perfect this
         TitleProfile = namedtuple('TitleProfile', 'has_title_list is_wear remark')
@@ -353,7 +355,7 @@ class Transaction(object):
         return await self.update_own_title_list()
 
     async def update_own_title_list(self):
-        response = self.http_get(Config.GET_MY_TITLE_LIST).json()
+        response = json.loads(await self.async_get(Config.GET_MY_TITLE_LIST))
 
         # TODO perfect this
         TitleProfile = namedtuple('TitleProfile', 'remark')
@@ -366,22 +368,22 @@ class Transaction(object):
         ]
         return self.__own_title_list
 
-    def cancel_own_wear_title(self):
-        response = self.http_get(Config.CANCEL_WEAR_TITLE).json()
-        return response.get('code', None) is 0
+    async def cancel_own_wear_title(self):
+        response = json.loads(await self.async_get(Config.CANCEL_WEAR_TITLE))
+        return response.async_get('code', None) is 0
 
     async def do_ban_user_on_own_room(self, uid):
         if self.__own_live_room_id is None:
             self.__own_live_room_id = await self.get_own_live_room_id()
         return await self.do_ban_user_on_live_room(uid, self.__own_live_room_id)
 
-    async  def do_ban_user_on_live_room(self, uid, live_room_id):
+    async def do_ban_user_on_live_room(self, uid, live_room_id):
         payload = { 'roomid': live_room_id, 'uid': uid, 'type': 1 }
-        response = self.http_post(Config.ADMIN_SHIELD_USER, data = payload).json()
+        response = json.loads(await self.async_post(Config.ADMIN_SHIELD_USER, data = payload))
         # TODO
 
 
-    def do_dan_mu_report(self):
+    async def do_dan_mu_report(self):
         # TODO
         payload = {
             'roomid': 0,
@@ -389,16 +391,16 @@ class Transaction(object):
             'msg': 'dan mu',
             'reason': 'reason'
         }
-        response = self.http_get(Config.USER_DM_REPORT, params = payload).json()
+        response = json.loads(await self.async_get(Config.USER_DM_REPORT, params = payload))
 
-    def get_master_level_profile(self, master_uid):
+    async def get_master_level_profile(self, master_uid):
         if not isinstance(master_uid, int):
             raise TypeError('master_uid must be int type')
 
         payload = {
             'uid': master_uid
         }
-        response = self.http_post(Config.GET_OTHER_MASTER_INFO, data = payload).json()
+        response = json.loads(await self.async_post(Config.GET_OTHER_MASTER_INFO, data = payload))
         response = response.get('data', {})
 
         MasterLevelProfile = namedtuple('MasterLevelProfile', 'sort master_level next_score upgrade_score')
@@ -413,13 +415,13 @@ class Transaction(object):
             response.get('upgrade_score', None)
         )
 
-    def do_attention_master_room(self, master_uid):
+    async def do_attention_master_room(self, master_uid):
         # TODO
         payload = {
             'uid': 0,
             'type': 1
         }
-        response = self.http_get(Config.ATTENTION_MASTER_ROOM, params = payload).json()
+        response = json.loads(await self.async_get(Config.ATTENTION_MASTER_ROOM, params = payload))
 
     def get_current_treasure_info(self):
         # TODO
@@ -444,7 +446,7 @@ class Transaction(object):
             else:
                 raise TypeError('live_room_id must be int')
 
-        live_room_id = await Utils.auto_get_real_room_id(self.__loop, live_room_id)
+        live_room_id = await Utils.auto_get_real_room_id(self.__async_loop, live_room_id)
         return await self.update_live_room_profile(live_room_id)
 
     async def update_live_room_profile(self, live_room_id):
@@ -453,7 +455,7 @@ class Transaction(object):
         payload = {
             'roomid': live_room_id
         }
-        response = self.http_get(Config.GET_ROOM_INFO, params = payload).json()
+        response = json.loads(await self.async_get(Config.GET_ROOM_INFO, params = payload))
         response = response.get('data', {})
 
         LiveRoomProfile = namedtuple('LiveRoomProfile', 'master_id master_name live_room_id live_status \
@@ -472,18 +474,18 @@ class Transaction(object):
             # live_room_fans_count
             response.get('FANS_COUNT'),
             # live_rom_gift_top
-            [ { 'uid': u['uid'], 'name': u['uname'], 'coin': u['coin'] } for u in response.get('GIFT_TOP') ],
+            [{ 'uid': u['uid'], 'name': u['uname'], 'coin': u['coin'] } for u in response.get('GIFT_TOP')],
             # live_room_all_gift
             response['RCOST'],
             # is_attention
             response['IS_STAR']
         )
 
-    def http_get(self, *args, **kwargs):
-        return self.__user_instance.get(*args, **kwargs)
+    async def async_get(self, *args, **kwargs):
+        return await self.__user_instance.async_get(*args, **kwargs)
 
-    def http_post(self, *args, **kwargs):
-        return self.__user_instance.post(*args, **kwargs)
+    async def async_post(self, *args, **kwargs):
+        return await self.__user_instance.async_post(*args, **kwargs)
 
     def get_user_instance(self):
         return self.__user_instance

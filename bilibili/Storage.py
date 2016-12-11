@@ -39,7 +39,7 @@ class SessionStorage(dict):
             except Exception as e:
                 print('in SessionStorage::__init__ error', e)
         else:
-            raise TypeError('in SessionStorage, file empty')
+            raise EOFError('session file is empty')
         super(SessionStorage, self).__init__(contents)
 
     def __enter__(self):
