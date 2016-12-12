@@ -54,6 +54,10 @@ class User(object):
             self.__account = await self.__login_with_qr(print_handle)
         self.__profile = await self.__init_profile()
 
+    def change_async_loop(self, async_loop):
+        self.__async_loop = async_loop
+        self.__session_object._loop = async_loop
+
     @classmethod
     def factory(cls, username, password, OAuthKey, cookieJar):
         pass

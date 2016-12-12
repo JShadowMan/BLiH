@@ -5,7 +5,7 @@
 import time
 import asyncio
 import tkinter as tk
-import threading
+import multiprocessing
 import tkinter.ttk as ttk
 from tkinter import messagebox
 from PIL import Image, ImageTk
@@ -16,17 +16,16 @@ _standard_window_size = (640, 480)
 
 class MessageHandler(Package.PackageHandlerProtocol):
 
-    def __init__(self, async_loop, output_buffer):
+    def __init__(self, async_loop, gui_application):
         super(MessageHandler, self).__init__()
 
         self._async_loop = async_loop
-        self._output_buffer = output_buffer
+        self._gui_application = gui_application
 
     def on_welcome_message(self, contents):
         pass
 
     def on_allow_join(self):
-        self._output_buffer.insert(tk.END, '[SYSTEM] Join Live Room Success.\n')
         return True
 
     def on_heartbeat_response(self, contents):
@@ -39,18 +38,19 @@ class MessageHandler(Package.PackageHandlerProtocol):
         pass
 
     def on_dan_mu_message(self, contents):
-        print(contents.message)
-        self._output_buffer.insert('1.0', '[MESSAGE] {}: {}\n'.format(contents.name, contents.message))
+        print(contents)
 
 class GuiApplication(tk.Frame):
     
-    def __init__(self, parent, async_loop = None):
+    def __init__(self, parent, async_loop = None, process_pool = None):
         tk.Frame.__init__(self, parent, background = 'white')
 
         if async_loop is None:
             self.__async_loop = asyncio.get_event_loop()
         else:
             self.__async_loop = async_loop
+
+        self.__process_pool = process_pool
 
         self.style = ttk.Style()
         self.__init_window()
@@ -191,7 +191,7 @@ class GuiApplication(tk.Frame):
     def __init_helper(self):
         if self.helper.accountSize() != 0:
             if self.helper.accountSize() == 1:
-                self.username.set(self.helper.accounts()[0])
+                self.username.set(self.helper.get_user(index = 0))
             else:
                 self.username.set('Multi User {}'.format(self.helper.accounts()))
 
@@ -229,21 +229,16 @@ class GuiApplication(tk.Frame):
 
         self.master.geometry('{}x{}+{}+{}'.format(width, height, x_coordinate, y_coordinate))
 
-async def main():
-    root_window = tk.Tk()
-    main_frame = GuiApplication(root_window)
-
-    async def run_gui(root, interval=0.05):
-        try:
-            while True:
-                root.update()
-                await asyncio.sleep(interval)
-        except tk.TclError as e:
-            if "application has been destroyed" not in e.args[0]:
-                raise
-
-    await run_gui(root_window)
+def helper_main():
+    while True:
+        print('hello')
+        time.sleep(1)
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    root_window = tk.Tk()
+    process_pool = multiprocessing.Pool(4)
+    main_frame = GuiApplication(root_window, process_pool = process_pool)
+
+    process_pool.apply_async(helper_main)
+
+    root_window.mainloop()

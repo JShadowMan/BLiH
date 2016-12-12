@@ -136,9 +136,11 @@ class Helper(object):
         if self.is_exists(name):
             return Transaction(self.__user_list[name], loop = self.__async_loop)
 
-    def get_user(self, name):
-        if self.is_exists(name):
+    def get_user(self, name = None, index = None):
+        if name is not None and self.is_exists(name):
             return self.__user_list[name]
+        if index is not None and index < len(self.__user_list):
+            return self.__user_list[self.accounts()[index]]
 
     def __dump_user_list(self):
         pickle_data = {}
