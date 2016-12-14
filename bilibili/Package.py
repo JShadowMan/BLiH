@@ -105,9 +105,14 @@ class LivePackageParser(object):
             HeartbeatResponse = namedtuple('HeartbeatResponse', 'count other')
 
             count = struct.unpack('!I', self.__raw_package.body)[0]
-            return HeartbeatResponse(count, {
-                'roomId': self.__room_id
-            })
+            return HeartbeatResponse(
+                # count
+                count,
+                # other
+                dict({
+                    'live_room_id': self.__room_id
+                }, **self.__other_data)
+            )
         elif self.type == self.PkgTypeAllowJoinLiveRoom:
             return None
         elif self.type == self.PkgTypeDanMuMessage:

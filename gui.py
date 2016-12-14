@@ -4,6 +4,7 @@
 #
 import time
 import asyncio
+import functools
 import tkinter as tk
 import multiprocessing
 import tkinter.ttk as ttk
@@ -14,42 +15,43 @@ from bilibili import Package, Helper, Live
 _standard_title = 'BiliBili Helper - ShadowMan'
 _standard_window_size = (640, 480)
 
-class MessageHandler(Package.PackageHandlerProtocol):
 
-    def __init__(self, async_loop, gui_application):
+class MessageHandler(Package.PackageHandlerProtocol):
+    def __init__(self, async_loop, output_handle):
         super(MessageHandler, self).__init__()
 
         self._async_loop = async_loop
-        self._gui_application = gui_application
+        self._output_handle = output_handle
 
     def on_welcome_message(self, contents):
         pass
 
     def on_allow_join(self):
+        self._output_handle('[SYSTEM] Join Live Room Success.\n')
         return True
 
     def on_heartbeat_response(self, contents):
-        pass
+        self._output_handle('[SYSTEM] Live_Room = {}\n'.format(contents.count))
 
     def on_gift_message(self, contents):
-        pass
+        self._output_handle('[SYSTEM] {} => {} {}\n'.format(contents.name, contents.count, contents.gift))
 
     def on_error_occurs(self, package):
         pass
 
     def on_dan_mu_message(self, contents):
-        print(contents)
+        self._output_handle('[MESSAGE] {}: {}\n'.format(contents.name, contents.message))
 
 class GuiApplication(tk.Frame):
-    
     def __init__(self, parent, async_loop = None, process_pool = None):
         tk.Frame.__init__(self, parent, background = 'white')
 
         if async_loop is None:
-            self.__async_loop = asyncio.get_event_loop()
-        else:
-            self.__async_loop = async_loop
+            async_loop = asyncio.get_event_loop()
+        self.__async_loop = async_loop
 
+        if process_pool is None:
+            process_pool = multiprocessing.Pool(4)
         self.__process_pool = process_pool
 
         self.style = ttk.Style()
@@ -95,23 +97,23 @@ class GuiApplication(tk.Frame):
         account_menu.add_separator()
         account_menu.add_command(label = 'Account Info')
         account_menu.add_separator()
-        account_menu.add_command(label='Own Live Info')
+        account_menu.add_command(label = 'Own Live Info')
 
         help_menu = tk.Menu(self.menu_bar, tearoff = False)
         help_menu.add_command(label = 'Documents')
         help_menu.add_command(label = 'Weibo')
         help_menu.add_separator()
         help_menu.add_command(label = 'Open Source')
-        help_menu.add_command(label='License')
+        help_menu.add_command(label = 'License')
         help_menu.add_separator()
-        help_menu.add_command(label='Check For Update')
-        help_menu.add_command(label='Changelog')
-        help_menu.add_command(label='About')
+        help_menu.add_command(label = 'Check For Update')
+        help_menu.add_command(label = 'Changelog')
+        help_menu.add_command(label = 'About')
 
-        self.menu_bar.add_cascade(label ='File', menu = file_menu, underline = 0)
-        self.menu_bar.add_cascade(label ='View', menu = view_menu, underline = 0)
+        self.menu_bar.add_cascade(label = 'File', menu = file_menu, underline = 0)
+        self.menu_bar.add_cascade(label = 'View', menu = view_menu, underline = 0)
         self.menu_bar.add_cascade(label = 'Account', menu = account_menu, underline = 0)
-        self.menu_bar.add_cascade(label ='Help', menu = help_menu, underline = 0)
+        self.menu_bar.add_cascade(label = 'Help', menu = help_menu, underline = 0)
 
     def __init_window_tool_bar(self):
         tool_bar = tk.Frame(self, relief = tk.RAISED)
@@ -119,7 +121,7 @@ class GuiApplication(tk.Frame):
         tool_bar.grid_columnconfigure(0, weight = True)
         tool_bar.grid_columnconfigure(1, weight = True)
         tool_bar.grid_columnconfigure(2, weight = True)
-        tool_bar.grid_columnconfigure(3, weight=True)
+        tool_bar.grid_columnconfigure(3, weight = True)
 
         image_msg = Image.open('resources/message.png')
         image_msg_tk = ImageTk.PhotoImage(image_msg)
@@ -165,7 +167,7 @@ class GuiApplication(tk.Frame):
 
         self.btn_text = tk.StringVar(self.master, 'Start')
         btn_start = tk.Button(top_frame, text = 'Start', font = 'Fira\ Code',
-                         command = self.__startup, textvariable = self.btn_text)
+                              command = self.__startup, textvariable = self.btn_text)
         btn_start.pack(side = tk.LEFT, padx = 3, pady = 3)
 
         top_frame.pack(side = tk.TOP, fill = tk.X)
@@ -189,14 +191,16 @@ class GuiApplication(tk.Frame):
         bot_frame.pack(side = tk.BOTTOM, fill = tk.X)
 
     def __init_helper(self):
-        if self.helper.accountSize() != 0:
-            if self.helper.accountSize() == 1:
+        if self.helper.accountSize() !=  0:
+            if self.helper.accountSize() ==  1:
                 self.username.set(self.helper.get_user(index = 0))
             else:
                 self.username.set('Multi User {}'.format(self.helper.accounts()))
 
     def __login_with_qr(self):
-        self.helper.login(print_handle = self.username.set)
+        login = functools.partial(self.helper.login, print_handle = self.username.set)
+        self.__process_pool.apply_async(login)
+        # self.helper.login(print_handle = self.username.set)
 
     def __startup(self):
         if not self.live_room_id.get():
@@ -208,17 +212,18 @@ class GuiApplication(tk.Frame):
             return
 
         live_room_id = int(self.live_room_id.get())
-        if self.btn_text.get() == 'Start':
+        if self.btn_text.get() ==  'Start':
             self.dan_mu_message.insert(tk.END, '[SYSTEM] Listening In Live-{}\n'.format(live_room_id))
         else:
             self.dan_mu_message.insert(tk.END, '[SYSTEM] Stop Listening For Live-{}\n'.format(live_room_id))
-        self.btn_text.set('Stop' if self.btn_text.get() == 'Start' else 'Start')
+        self.btn_text.set('Stop' if self.btn_text.get() ==  'Start' else 'Start')
 
         return asyncio.ensure_future(self.__listen_live_room(live_room_id))
 
     async def __listen_live_room(self, live_room_id):
+        output_handle = functools.partial(self.dan_mu_message.insert, '1.0')
         await Live.LiveBiliBili(loop = self.__async_loop).listen(live_room_id, MessageHandler,
-                                                                 self.__async_loop, self.dan_mu_message)
+                                                               self.__async_loop, output_handle)
 
     def __init_window_position(self, width, height):
         screen_width = self.master.winfo_screenwidth()
@@ -229,16 +234,19 @@ class GuiApplication(tk.Frame):
 
         self.master.geometry('{}x{}+{}+{}'.format(width, height, x_coordinate, y_coordinate))
 
-def helper_main():
-    while True:
-        print('hello')
-        time.sleep(1)
-
-if __name__ == '__main__':
+if __name__ ==  '__main__':
     root_window = tk.Tk()
+    async_loop = asyncio.get_event_loop()
     process_pool = multiprocessing.Pool(4)
-    main_frame = GuiApplication(root_window, process_pool = process_pool)
+    main_frame = GuiApplication(root_window, async_loop = async_loop, process_pool = process_pool)
 
-    process_pool.apply_async(helper_main)
+    async def run_gui(root, interval = 0.05):
+        try:
+            while True:
+                root.update()
+                await asyncio.sleep(interval)
+        except tk.TclError as e:
+            if "application has been destroyed" not in e.args[0]:
+                raise
 
-    root_window.mainloop()
+    async_loop.run_until_complete(run_gui(root_window))

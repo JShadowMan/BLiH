@@ -43,7 +43,7 @@ async def auto_get_real_room_id(loop, live_room_address, *, live_room_id = None)
     return live_room_id
 
 async def get_real_room_id(loop, live_room_address):
-    response = await fetch(loop, url = live_room_address)
+    response = await fetch(loop, live_room_address)
     try:
         return re.search(r'(?<=ROOMID\s=\s)([\d]+)', response).group()
     except Exception as e:

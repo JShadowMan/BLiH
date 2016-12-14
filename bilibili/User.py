@@ -47,6 +47,10 @@ class User(object):
         new_event_loop.stop()
         asyncio.set_event_loop(self.__async_loop)
 
+    @classmethod
+    async def login(cls, username = None, password = None, print_handle = None, cookies = None):
+        pass
+
     async def __init_account(self, qr, username, password, print_handle):
         if username is not None and password is not None:
             self.__account = await self.__login_with_pw(username, password)
@@ -73,8 +77,12 @@ class User(object):
         except requests.exceptions.ConnectionError as e:
             raise Exceptions.NetworkException('request timeout')
         except RuntimeError as e:
-            logging.warning(str(e))
-            async with aiohttp.ClientSession(loop = asyncio.get_event_loop()) as client:
+            logging.warning('In User.async_get ' + e.args[0])
+            self.__async_loop = asyncio.get_event_loop()
+            self.__session_object._loop = self.__async_loop
+            logging.info('changed async loop instance')
+
+            async with aiohttp.ClientSession(loop = self.__async_loop) as client:
                 client.cookie_jar._cookies = self.__session_object.cookie_jar._cookies
                 async with client.get(*args, **kwargs) as response:
                     if response.status is 200:
@@ -93,6 +101,11 @@ class User(object):
         except requests.exceptions.ConnectionError as e:
             raise Exceptions.NetworkException('request timeout')
         except RuntimeError as e:
+            logging.warning('In User.async_post ' + e.args[0])
+            self.__async_loop = asyncio.get_event_loop()
+            self.__session_object._loop = self.__async_loop
+            logging.info('changed async loop instance')
+
             async with aiohttp.ClientSession(loop = asyncio.get_event_loop()) as client:
                 client.cookie_jar._cookies = self.__session_object.cookie_jar._cookies
                 async with client.post(*args, **kwargs) as response:
